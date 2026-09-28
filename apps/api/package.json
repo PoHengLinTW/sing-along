@@ -1,0 +1,19 @@
+{
+  "name": "@sing-along/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15"
+  },
+  "dependencies": {
+    "@sing-along/shared": "workspace:*",
+    "fastify": "^5.12.5"
+  }
+}

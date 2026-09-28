@@ -1,0 +1,4 @@
+packages:
+  - apps/*
+  - packages/*
+# spike/ is throwaway and has its own lockfile: intentionally not a workspace member.
