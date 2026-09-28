@@ -2,6 +2,7 @@ import type { HealthResponse } from '@sing-along/shared';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Fastify from 'fastify';
 import { registerErrorHandler } from './errors';
+import { registerLabelRoutes } from './routes/labels';
 import { registerProjectRoutes } from './routes/projects';
 import { registerTrackRoutes } from './routes/tracks';
 import type { Storage } from './storage/types';
@@ -19,5 +20,6 @@ export function buildApp(deps: Deps) {
   app.get('/api/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
   registerProjectRoutes(app, deps);
   registerTrackRoutes(app, deps);
+  registerLabelRoutes(app, deps);
   return app;
 }

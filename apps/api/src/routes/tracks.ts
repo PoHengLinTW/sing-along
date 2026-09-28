@@ -2,13 +2,15 @@ import {
   type AudioUrlResponse,
   extensionForMime,
   isAllowedAudioType,
+  trackOrderSchema,
+  trackUpdateSchema,
   type UploadUrlResponse,
   uploadUrlRequestSchema,
 } from '@sing-along/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Deps } from '../app';
-import { loadTrack } from '../db/projects-repo';
+import { loadProject, loadTrack } from '../db/projects-repo';
 import { labels, projects, trackLabels, tracks } from '../db/schema';
 import { HttpError, notFound, parseId, parseInput } from '../errors';
 
@@ -136,5 +138,94 @@ export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
     if (!track) throw notFound('Track');
     const url = await storage.presignGet({ key: track.key, expiresInSec: ttl });
     return { url, expiresAt: expiresAt() } satisfies AudioUrlResponse;
+  });
+
+  app.patch('/api/tracks/:id', async (req) => {
+    const id = parseId((req.params as { id: string }).id);
+    const { labels: labelIds, ...fields } = parseInput(trackUpdateSchema, req.body);
+    const [track] = await db
+      .select({ projectId: tracks.projectId })
+      .from(tracks)
+      .where(and(eq(tracks.id, id), eq(tracks.status, 'active')));
+    if (!track) throw notFound('Track');
+
+    const unique = labelIds ? [...new Set(labelIds)] : undefined;
+    if (unique?.length) {
+      const found = await db
+        .select({ id: labels.id })
+        .from(labels)
+        .where(inArray(labels.id, unique));
+      if (found.length !== unique.length) {
+        throw new HttpError(400, 'Unknown label', { labels: 'One or more labels do not exist' });
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      if (Object.keys(fields).length) await tx.update(tracks).set(fields).where(eq(tracks.id, id));
+      if (unique) {
+        await tx.delete(trackLabels).where(eq(trackLabels.trackId, id));
+        if (unique.length) {
+          await tx
+            .insert(trackLabels)
+            .values(unique.map((labelId, position) => ({ trackId: id, labelId, position })));
+        }
+      }
+      await tx
+        .update(projects)
+        .set({ updatedAt: new Date() })
+        .where(eq(projects.id, track.projectId));
+    });
+    return loadTrack(db, id);
+  });
+
+  app.delete('/api/tracks/:id', async (req, reply) => {
+    const id = parseId((req.params as { id: string }).id);
+    const [row] = await db
+      .delete(tracks)
+      .where(eq(tracks.id, id))
+      .returning({ key: tracks.storageKey, projectId: tracks.projectId });
+    if (!row) throw notFound('Track');
+    await db.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, row.projectId));
+    try {
+      await storage.deleteObjects([row.key]);
+    } catch (err) {
+      // DB is the source of truth; the M3 orphan cleanup removes the leftover object.
+      req.log.error({ err, key: row.key }, 'storage delete failed after track delete');
+    }
+    return reply.status(204).send();
+  });
+
+  app.put('/api/projects/:id/track-order', async (req) => {
+    const projectId = parseId((req.params as { id: string }).id);
+    const { trackIds } = parseInput(trackOrderSchema, req.body);
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    if (!project) throw notFound('Project');
+
+    const current = await db
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(and(eq(tracks.projectId, projectId), eq(tracks.status, 'active')));
+    const expected = new Set(current.map((r) => r.id));
+    const given = new Set(trackIds);
+    if (
+      given.size !== trackIds.length ||
+      given.size !== expected.size ||
+      trackIds.some((x) => !expected.has(x))
+    ) {
+      throw new HttpError(400, 'Track order must list every track in this project exactly once', {
+        trackIds: 'Must contain every track of this project exactly once',
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      for (const [index, trackId] of trackIds.entries()) {
+        await tx.update(tracks).set({ sortOrder: index }).where(eq(tracks.id, trackId));
+      }
+      await tx.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId));
+    });
+    return loadProject(db, projectId);
   });
 }

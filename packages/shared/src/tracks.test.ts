@@ -74,3 +74,41 @@ describe('uploadUrlRequestSchema', () => {
     expect(uploadUrlRequestSchema.safeParse({ ...valid, peaks: [1.5] }).success).toBe(false);
   });
 });
+
+import { labelCreateSchema, trackOrderSchema, trackUpdateSchema } from './index';
+
+describe('trackUpdateSchema', () => {
+  it('is partial', () => {
+    expect(trackUpdateSchema.parse({ name: ' New ' })).toEqual({ name: 'New' });
+    expect(trackUpdateSchema.parse({})).toEqual({});
+  });
+  it('rejects an empty name', () => {
+    expect(trackUpdateSchema.safeParse({ name: '' }).success).toBe(false);
+  });
+  it('accepts integer offsets within ±600000 ms only', () => {
+    expect(trackUpdateSchema.safeParse({ latencyOffsetMs: -600000 }).success).toBe(true);
+    expect(trackUpdateSchema.safeParse({ startOffsetMs: 600001 }).success).toBe(false);
+    expect(trackUpdateSchema.safeParse({ latencyOffsetMs: 1.5 }).success).toBe(false);
+  });
+  it('accepts a label id set and an empty set', () => {
+    expect(trackUpdateSchema.parse({ labels: [1, 2] })).toEqual({ labels: [1, 2] });
+    expect(trackUpdateSchema.parse({ labels: [] })).toEqual({ labels: [] });
+  });
+});
+
+describe('trackOrderSchema', () => {
+  it('needs a list of positive integer ids', () => {
+    expect(trackOrderSchema.parse({ trackIds: [3, 1, 2] })).toEqual({ trackIds: [3, 1, 2] });
+    expect(trackOrderSchema.safeParse({ trackIds: [0] }).success).toBe(false);
+    expect(trackOrderSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('labelCreateSchema', () => {
+  it('trims and enforces 1-30 characters', () => {
+    expect(labelCreateSchema.parse({ name: '  Kazoo ' })).toEqual({ name: 'Kazoo' });
+    expect(labelCreateSchema.safeParse({ name: '   ' }).success).toBe(false);
+    expect(labelCreateSchema.safeParse({ name: 'a'.repeat(31) }).success).toBe(false);
+    expect(labelCreateSchema.safeParse({ name: 'a'.repeat(30) }).success).toBe(true);
+  });
+});

@@ -59,3 +59,32 @@ export type UploadUrlResponse = z.infer<typeof uploadUrlResponseSchema>;
 
 export const audioUrlResponseSchema = z.object({ url: z.string(), expiresAt: z.string() });
 export type AudioUrlResponse = z.infer<typeof audioUrlResponseSchema>;
+
+export const trackUpdateSchema = z
+  .object({
+    name: uploadUrlRequestSchema.shape.name,
+    performer: z
+      .string()
+      .trim()
+      .max(100)
+      .transform((v) => (v === '' ? null : v))
+      .nullable(),
+    labels: z.array(z.number().int().positive()).max(20),
+    startOffsetMs: z.number().int().min(-OFFSET_MAX_MS).max(OFFSET_MAX_MS),
+    latencyOffsetMs: z.number().int().min(-OFFSET_MAX_MS).max(OFFSET_MAX_MS),
+  })
+  .partial();
+export type TrackUpdate = z.infer<typeof trackUpdateSchema>;
+
+export const trackOrderSchema = z.object({ trackIds: z.array(z.number().int().positive()) });
+export type TrackOrder = z.infer<typeof trackOrderSchema>;
+
+export const LABEL_NAME_MAX = 30;
+export const labelCreateSchema = z.object({
+  name: z
+    .string({ error: 'Label name is required' })
+    .trim()
+    .min(1, 'Label name is required')
+    .max(LABEL_NAME_MAX, `Label name must be at most ${LABEL_NAME_MAX} characters`),
+});
+export type LabelCreate = z.infer<typeof labelCreateSchema>;
