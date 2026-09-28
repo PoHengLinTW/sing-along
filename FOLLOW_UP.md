@@ -20,7 +20,7 @@ Open questions to revisit.
 
 ## Planning decisions to confirm (from task breakdown, see tasks/README.md)
 1. Confirmation modals built in M1 alongside deletes (PRD plan said M3)
-2. MinIO as local/CI stand-in for R2
+2. RustFS as local/CI stand-in for R2 (was MinIO; see CONCLUDE Q19)
 3. Single production app container (Fastify serves API + static web)
 4. Record-while-stopped starts playback + recording; Stop pauses playback
 5. Input device picker (choose USB mic) added in M2

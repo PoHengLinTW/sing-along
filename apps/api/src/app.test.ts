@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { healthResponseSchema } from '@sing-along/shared';
+import { describe, expect, it } from 'vitest';
 import { buildApp } from './app';
 
 describe('GET /api/health', () => {

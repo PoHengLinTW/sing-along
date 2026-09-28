@@ -32,7 +32,7 @@ Tasks for each milestone in [`PRD.md`](../PRD.md). Each task is about 0.5–1 da
 These were decided while writing the tasks and aren't in the PRD. Confirm or change them:
 
 1. **Confirmation modals are built in M1** together with the delete actions (the PRD plan put them in M3). A delete button with no confirmation shouldn't exist even for a short time.
-2. **MinIO in the local dev Compose file** stands in for R2, so development and CI need no Cloudflare credentials.
+2. **RustFS (S3-compatible) in the local dev Compose file** stands in for R2, so development and CI need no Cloudflare credentials.
 3. **Production runs as one app container:** Fastify serves the API *and* the built web assets (`@fastify/static`). The stack is then app + postgres + cloudflared, with no separate web server.
 4. **Recording while stopped** starts playback from the playhead and recording at the same moment. **Stop** ends the take and pauses playback.
 5. **Input device picker:** Users can choose their mic (e.g. a USB mic instead of the built-in one). Cheap to build and important for quality.

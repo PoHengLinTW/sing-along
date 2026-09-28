@@ -1,0 +1,1 @@
+-- Baseline migration (schema arrives in M1-03).

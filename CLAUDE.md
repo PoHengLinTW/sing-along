@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is still **planning only**. There is no source code or `package.json` yet (the git repo exists and holds only the planning docs). Implementation starts with milestone M0 (`tasks/M0.md`). Update this file as soon as real code, commands and structure exist, and delete the "planned" markers once they're true.
+M0 (audio spike, `spike/`) is done apart from manual device checks. M1 is in progress: the monorepo scaffold (M1-01) and local infra (M1-02) exist; the product features do not yet. Sections below marked "planned" describe the target architecture. Update this file as real code and commands land, and delete the "planned" markers once they're true.
 
 ## Planning documents
 
@@ -26,7 +26,7 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
   - `apps/web`: React + Vite + vite-plugin-pwa, Zustand, TanStack Query, wavesurfer.js v7
   - `apps/api`: Fastify + Drizzle + PostgreSQL
   - `packages/shared`: types, zod schemas, pure logic such as the LRC parser
-- **Audio never passes through the API.** The browser uploads to and downloads from Cloudflare R2 directly with **presigned URLs**. The flow is `upload-url` (cap checks, creates a `pending` track, returns a PUT URL signed with the exact Content-Length) → PUT → `confirm` (HEAD check, marks the track `active`). MinIO stands in for R2 in dev and CI.
+- **Audio never passes through the API.** The browser uploads to and downloads from Cloudflare R2 directly with **presigned URLs**. The flow is `upload-url` (cap checks, creates a `pending` track, returns a PUT URL signed with the exact Content-Length) → PUT → `confirm` (HEAD check, marks the track `active`). RustFS (an S3-compatible store; MinIO images are no longer published) stands in for R2 in dev and CI.
 - **Playback:** Uses our own Web Audio engine (`AudioBufferSourceNode` + a GainNode per track). wavesurfer.js only *renders* waveforms from precomputed peaks (pending the M0-07 finding). A track plays at `start_offset_ms + latency_offset_ms`. The scheduling, solo and loop math are pure functions with unit tests.
 - **Recording:**
   - AudioWorklet mono capture with echoCancellation, noiseSuppression and autoGainControl **off**.
@@ -38,13 +38,13 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
 - **Caps** (enforced on the server, set by env vars): 60 MB per file, 10 min per track, 10 tracks per project, 100 projects, an 8 GB global total (active + pending sizes). Nothing is ever removed automatically to make room.
 - **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres + cloudflared (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).
 
-## Planned commands (from tasks/M1–M3; not yet created)
+## Commands (`pnpm cleanup` is still planned, M3)
 
 ```bash
 pnpm dev                                        # web + api; web proxies /api
-pnpm lint && pnpm typecheck && pnpm test        # CI runs these
+pnpm lint && pnpm typecheck && pnpm test        # CI runs these (lint = Biome; TypeScript 7)
 pnpm --filter <web|api|shared> test -- <file>   # single test file (Vitest)
-docker compose -f docker-compose.dev.yml up     # local Postgres + MinIO
+docker compose -f docker-compose.dev.yml up     # local Postgres + RustFS (S3)
 pnpm db:generate && pnpm db:migrate             # Drizzle migrations
 pnpm cleanup --dry-run                          # orphan/pending storage cleanup preview
 ```
@@ -62,7 +62,7 @@ The M0 spike lives in `spike/` (Vite + vanilla TS, served over HTTPS on the LAN 
 - **E2E from M3 on.** Before M3 and M4 are closed, add Playwright E2E tests covering **every user flow** the milestone delivers (not just smoke flows), and run them green. The final task of the milestone is "E2E for M<n> user flows". List the flows in that task, then map each flow to a test. A milestone with a user flow that has no E2E test is not done.
   - M0, M1 and M2 have **no E2E requirement**. They rely on unit/integration tests (TDD) and manual checks. M3's E2E suite must still cover the user flows delivered in M1 and M2, since M3 is where the suite is first built.
   - M0 is a throwaway spike. Record its findings in `spike/SPIKE_NOTES.md`.
-  - E2E runs against the Compose stack (Postgres + MinIO). Use Chromium's fake media device flags for mic flows. Real-device audio checks stay manual.
+  - E2E runs against the Compose stack (Postgres + RustFS). Use Chromium's fake media device flags for mic flows. Real-device audio checks stay manual.
 
 ## Testing expectations (Definition of Done)
 

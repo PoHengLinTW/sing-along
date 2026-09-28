@@ -305,3 +305,11 @@ A fullstack Progressive Web App for practicing group harmony singing:
 - **Probe length:** drift was measured over 30 s instead of 5 min. If drift shows up in production, fix it then.
 
 Details and numbers: `spike/SPIKE_NOTES.md`.
+
+---
+
+## Q19: Local S3 stand-in is RustFS, not MinIO; lint/format is Biome
+
+**Decision:**
+- **RustFS** (`rustfs/rustfs`) replaces MinIO in `docker-compose.dev.yml`. MinIO's official images (`minio/minio`, `minio/mc`, quay.io) can no longer be pulled. Verified against RustFS before adopting: a presigned PUT signed with `Content-Length` and `Content-Type` returns 403 on a different size or type, HEAD returns size and type, and CORS works with `RUSTFS_CORS_ALLOWED_ORIGINS`. The bucket is created by a one-shot `amazon/aws-cli` container. Host ports: Postgres 5433 (5432 is often taken), S3 9000, API 3100 (3000 is often taken).
+- **Biome** replaces ESLint + typescript-eslint + Prettier. typescript-eslint did not support TypeScript 7, which had forced us onto TypeScript 5. Biome parses TypeScript itself, so the repo runs on TypeScript 7. `biome migrate` rewrote `recommended: true` to `preset: none`, which silently disables every rule; it is set to `recommended` and checked with a deliberately bad file.
