@@ -1,0 +1,56 @@
+# TODO
+
+Actionable items confirmed during the PRD session.
+
+- [ ] Enforce global caps on the number of projects and tracks (exact limits TBD)
+- [ ] Store audio in an S3-compatible object store (provider TBD)
+- [ ] Home page: public list of all projects (plus "Create project")
+- [ ] Routes use incremental integer IDs (`/project/:id`)
+- [ ] PostgreSQL on the homelab for metadata
+- [ ] Track model includes `start_offset_ms`. Recording starts at the current playhead.
+- [ ] Per-track latency/offset slider (±ms nudge), usable after recording
+- [ ] First-record "use headphones" hint
+- [ ] getUserMedia with echoCancellation / noiseSuppression / autoGainControl = false
+- [ ] Local draft takes in IndexedDB: preview with mix, re-record, discard, upload
+- [ ] Upload accepts mp3, m4a/aac, wav, ogg, webm/opus, flac. Validate type and size.
+- [ ] Store original files unchanged (no transcoding)
+- [ ] Multitrack waveform view (wavesurfer.js v7 + multitrack plugin) with shared, seekable playhead
+- [ ] Live mic waveform while recording
+- [ ] Compute peaks client-side on upload/record; store peaks JSON with each track
+- [ ] Per-track volume / mute / solo
+- [ ] A–B loop region
+- [ ] Transport: restart, −10s, +10s, play/pause, record, mic mute (silence input mid-take)
+- [ ] Keyboard shortcuts: Space, R, ←/→, Home, M
+- [ ] Persist mixer state per project in localStorage
+- [ ] DB schema: projects, tracks, labels, track_labels (many-to-many)
+- [ ] Seed preset labels; allow creating custom labels
+- [ ] Label chips with colors; track color from first label; filter / bulk-mute by label
+- [ ] Performer name field, remembered in localStorage
+- [ ] Drag to reorder tracks (sort_order)
+- [ ] Scaffold pnpm monorepo: apps/web (React+Vite+vite-plugin-pwa), apps/api (Fastify+Drizzle), packages/shared (zod)
+- [ ] Presigned upload/download URL endpoints; browser talks to bucket directly
+- [ ] Docker Compose: web, api, postgres
+- [ ] Enable R2 (payment method required); create bucket; configure CORS for app origin (PUT/GET)
+- [ ] Add cloudflared to Docker Compose / route tunnel to web + api
+- [ ] Set a Cloudflare billing/usage alert as a safety net
+- [ ] Recording pipeline: AudioWorklet mono PCM capture → chunks to IndexedDB → FLAC 16-bit encode (WASM) on stop; WAV fallback
+- [ ] Live input waveform from our own AnalyserNode (not wavesurfer record plugin)
+- [ ] Caps: 60 MB/file, 10 min/track, 10 tracks/project, 100 projects, 8 GB global
+- [ ] Pre-upload cap check, Content-Length-signed presigned PUT, post-upload confirm + size verify
+- [ ] Nightly cleanup job for unconfirmed/orphaned R2 objects
+- [ ] Storage usage indicator on home page
+- [ ] Document known limitation: RAM usage of decoded tracks on mobile
+- [ ] PWA manifest + icons + service worker app-shell caching
+- [ ] "N drafts not uploaded" badge; upload queue when back online
+- [ ] Per-project "Make available offline" toggle: cache metadata + audio (Cache API), show size, allow removal
+- [ ] Audio cache keyed by track ID (immutable), independent of presigned URL expiry
+- [ ] Disable mutating actions with clear messaging when offline
+- [ ] (Stretch) LRC upload/paste per project; parse; highlighted auto-scrolling lyrics panel; click line → seek to t − 3 s
+- [ ] Desktop/tablet layout: transport bar, track rows (controls + waveform), zoomable shared timeline, lyrics side panel
+- [ ] Phone layout: overview waveform, compact track list, big bottom transport bar, per-track detail sheet
+- [ ] Test on Chrome + Safari (desktop, iOS, Android), then Firefox; add "install to home screen" hint for iOS
+- [ ] Inline editing for project (title/artist/notes) and track (name/performer/labels/offsets/order) with debounced autosave
+- [ ] Confirm modals: delete project (type title), delete track, discard draft, replace lyrics
+- [ ] beforeunload guard during recording
+- [ ] Project delete cascades DB rows + R2 objects
+- [ ] M0 spike: sync playback of 3 local files + FLAC take at playhead + offset slider, tested on desktop and iPhone
