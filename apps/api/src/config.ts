@@ -13,6 +13,7 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   PUBLIC_ORIGIN: z.url(),
+  PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
 export interface Config {
@@ -27,6 +28,7 @@ export interface Config {
     forcePathStyle: boolean;
   };
   publicOrigin: string;
+  presignTtlSec: number;
 }
 
 export class ConfigError extends Error {}
@@ -57,5 +59,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       forcePathStyle: e.S3_FORCE_PATH_STYLE,
     },
     publicOrigin: e.PUBLIC_ORIGIN,
+    presignTtlSec: e.PRESIGN_TTL_SECONDS,
   };
 }

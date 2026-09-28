@@ -59,21 +59,43 @@ export async function loadProject(db: Db, id: number): Promise<ProjectDetail | n
     notes: p.notes,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
-    tracks: trackRows.map((t) => ({
-      id: t.id,
-      projectId: t.projectId,
-      name: t.name,
-      performer: t.performer,
-      labels: byTrack.get(t.id) ?? [],
-      startOffsetMs: t.startOffsetMs,
-      latencyOffsetMs: t.latencyOffsetMs,
-      durationMs: t.durationMs,
-      mimeType: t.mimeType,
-      sizeBytes: t.sizeBytes,
-      source: t.source,
-      sortOrder: t.sortOrder,
-      peaks: t.peaks,
-      createdAt: t.createdAt.toISOString(),
-    })),
+    tracks: trackRows.map((t) => toTrackDto(t, byTrack.get(t.id) ?? [])),
   };
+}
+
+export function toTrackDto(
+  t: typeof tracks.$inferSelect,
+  trackLabelsList: TrackDto['labels'],
+): TrackDto {
+  return {
+    id: t.id,
+    projectId: t.projectId,
+    name: t.name,
+    performer: t.performer,
+    labels: trackLabelsList,
+    startOffsetMs: t.startOffsetMs,
+    latencyOffsetMs: t.latencyOffsetMs,
+    durationMs: t.durationMs,
+    mimeType: t.mimeType,
+    sizeBytes: t.sizeBytes,
+    source: t.source,
+    sortOrder: t.sortOrder,
+    peaks: t.peaks,
+    createdAt: t.createdAt.toISOString(),
+  };
+}
+
+export async function loadTrack(db: Db, id: number): Promise<TrackDto | null> {
+  const [t] = await db.select().from(tracks).where(eq(tracks.id, id));
+  if (!t) return null;
+  const rows = await db
+    .select({ label: labels })
+    .from(trackLabels)
+    .innerJoin(labels, eq(labels.id, trackLabels.labelId))
+    .where(eq(trackLabels.trackId, id))
+    .orderBy(asc(trackLabels.position));
+  return toTrackDto(
+    t,
+    rows.map((r) => r.label),
+  );
 }

@@ -1,6 +1,13 @@
-import { DeleteObjectsCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Config } from '../config';
-import type { Storage } from './types';
+import type { ObjectInfo, Storage } from './types';
 
 export function createS3Client(s3: Config['s3']): S3Client {
   return new S3Client({
@@ -8,14 +15,60 @@ export function createS3Client(s3: Config['s3']): S3Client {
     region: s3.region,
     forcePathStyle: s3.forcePathStyle,
     credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
+    // Presigned PUTs must not carry checksum headers the browser can't compute.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 }
 
 export class S3Storage implements Storage {
   constructor(
-    private client: Pick<S3Client, 'send'>,
+    private client: S3Client,
     private bucket: string,
   ) {}
+
+  presignPut({
+    key,
+    contentType,
+    sizeBytes,
+    expiresInSec,
+  }: {
+    key: string;
+    contentType: string;
+    sizeBytes: number;
+    expiresInSec: number;
+  }): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: sizeBytes,
+      }),
+      {
+        expiresIn: expiresInSec,
+        // Sign both headers so storage rejects a PUT with another type or size.
+        signableHeaders: new Set(['content-type', 'content-length']),
+      },
+    );
+  }
+
+  presignGet({ key, expiresInSec }: { key: string; expiresInSec: number }): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+      expiresIn: expiresInSec,
+    });
+  }
+
+  async head(key: string): Promise<ObjectInfo | null> {
+    try {
+      const out = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return { sizeBytes: out.ContentLength ?? 0, contentType: out.ContentType };
+    } catch (err) {
+      const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === 'NotFound' || e.$metadata?.httpStatusCode === 404) return null;
+      throw err;
+    }
+  }
 
   async deleteObjects(keys: string[]): Promise<void> {
     for (let i = 0; i < keys.length; i += 1000) {

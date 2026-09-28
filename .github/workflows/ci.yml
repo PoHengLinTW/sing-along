@@ -17,6 +17,13 @@ jobs:
           - 5433:5432
         options: >-
           --health-cmd "pg_isready -U singalong" --health-interval 2s --health-timeout 3s --health-retries 20
+      s3:
+        image: rustfs/rustfs:latest
+        env:
+          RUSTFS_ACCESS_KEY: minioadmin
+          RUSTFS_SECRET_KEY: minioadmin
+        ports:
+          - 9000:9000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

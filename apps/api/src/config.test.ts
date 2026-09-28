@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     expect(c.port).toBe(3100);
     expect(c.databaseUrl).toBe(valid.DATABASE_URL);
     expect(c.s3.bucket).toBe('sing-along');
+    expect(c.presignTtlSec).toBe(900);
     expect(c.s3.forcePathStyle).toBe(false);
     expect(c.publicOrigin).toBe('http://localhost:5173');
   });

@@ -16,7 +16,7 @@ try {
 
 const { db } = createDb(config.databaseUrl);
 const storage = new S3Storage(createS3Client(config.s3), config.s3.bucket);
-const app = buildApp({ db, storage });
+const app = buildApp({ db, storage, presignTtlSec: config.presignTtlSec });
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {
   console.error(err);
   process.exit(1);
