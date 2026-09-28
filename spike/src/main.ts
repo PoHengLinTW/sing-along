@@ -1,5 +1,6 @@
 import { Engine, type EngineTrack } from './engine/engine';
 import { encodeInWorker } from './encode/client';
+import { ChunkWriter, TakeStore } from './capture/store';
 import { Recorder } from './capture/recorder';
 import { trimBeforeZero, takeDurationMs, type Take } from './capture/take';
 import { RAW_MIC_CONSTRAINTS, checkMicSupport, describeMicError } from './mic';
@@ -97,17 +98,25 @@ tick();
 
 // ---- M0-03: capture at the playhead ----
 let recorder: Recorder | null = null;
+let writer: ChunkWriter | null = null;
+let currentTakeId: string | null = null;
 const takes: Take[] = [];
 
 $('record').onclick = async () => {
   if (!support.ok) return log(`Cannot record: ${support.reason}`);
   const e = getEngine();
   await e.play(); // sets the play anchor; the first captured frame is mapped onto the timeline from it
-  recorder = new Recorder(e.ctx);
+  const early: Float32Array[] = []; // chunks that arrive before the take row exists
+  writer = null;
+  recorder = new Recorder(e.ctx, { onChunk: (c) => (writer ? writer.push(c) : early.push(c)) });
   try {
     const firstCtxTime = await recorder.start();
     const startSec = e.playheadAtCtxTime(firstCtxTime);
     recorder.startSec = startSec;
+    const store = await getStore();
+    currentTakeId = await store.createTake({ sampleRate: e.ctx.sampleRate, startSec });
+    writer = new ChunkWriter(store, currentTakeId); // ~1 flush per second
+    early.forEach((c) => writer!.push(c));
     log(`Record settings: ${JSON.stringify(recorder.settings)}`);
     log(`ctx.sampleRate=${e.ctx.sampleRate}; first frame @ctx ${firstCtxTime.toFixed(3)} => timeline ${startSec.toFixed(3)}s`);
     $<HTMLButtonElement>('record').disabled = true;
@@ -122,6 +131,9 @@ $('stop-record').onclick = async () => {
   if (!recorder) return;
   const e = getEngine();
   const raw = await recorder.stop(0);
+  await writer?.close();
+  if (currentTakeId) await (await getStore()).finishTake(currentTakeId);
+  writer = null;
   e.pause();
   const t = trimBeforeZero(raw.samples, raw.sampleRate, recorder.startSec);
   const take: Take = { samples: t.samples, sampleRate: raw.sampleRate, startOffsetMs: Math.round(t.startSec * 1000) };
@@ -177,3 +189,37 @@ $('bench-encode').onclick = async () => {
   }
   await encodeAndCheck('bench-4min', x, sr);
 };
+
+// ---- M0-06: crash-safe chunks + recovery ----
+let storePromise: Promise<TakeStore> | null = null;
+const getStore = () => (storePromise ??= TakeStore.open());
+
+async function checkRecovery(): Promise<void> {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (est) log(`Storage quota: ${((est.quota ?? 0) / 1e9).toFixed(2)} GB, usage ${((est.usage ?? 0) / 1e6).toFixed(1)} MB`);
+    const store = await getStore();
+    const list = await store.listUnfinished();
+    const box = $('recovery');
+    box.textContent = list.length ? '' : 'No unfinished takes.';
+    for (const meta of list) {
+      const btn = document.createElement('button');
+      const full = await store.loadTake(meta.id);
+      const secs = full.samples.length / full.sampleRate;
+      btn.textContent = `Recover take from ${new Date(meta.createdAt).toLocaleTimeString()} (${secs.toFixed(1)}s)`;
+      btn.onclick = async () => {
+        const e = getEngine();
+        const t = trimBeforeZero(full.samples, full.sampleRate, full.startSec);
+        const buf = e.ctx.createBuffer(1, t.samples.length, full.sampleRate);
+        buf.copyToChannel(t.samples as Float32Array<ArrayBuffer>, 0);
+        renderTrack(e.addBuffer(`Recovered ${secs.toFixed(1)}s`, buf, Math.round(t.startSec * 1000)));
+        await store.finishTake(meta.id);
+        btn.remove();
+      };
+      box.append(btn);
+    }
+  } catch (err) {
+    log(`Recovery check failed: ${(err as Error).message}`);
+  }
+}
+void checkRecovery();
