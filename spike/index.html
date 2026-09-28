@@ -4,11 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sing-along spike</title>
+    <style>
+      body { font: 14px system-ui; max-width: 760px; margin: 1rem auto; padding: 0 1rem; }
+      .track { border: 1px solid #ccc; border-radius: 6px; padding: .5rem; margin: .5rem 0; }
+      .track label { display: inline-block; margin-right: .75rem; }
+      input[type=range] { width: 100%; }
+      section { margin: 1.25rem 0; }
+      pre { background: #f4f4f4; padding: .5rem; overflow: auto; }
+    </style>
   </head>
   <body>
     <h1>Sing-along spike</h1>
     <p id="env"></p>
-    <button id="enable-mic">Enable mic</button>
+
+    <section>
+      <h2>Tracks</h2>
+      <input id="files" type="file" accept="audio/*" multiple />
+      <div id="tracks"></div>
+    </section>
+
+    <section>
+      <h2>Transport</h2>
+      <button id="play">Play</button>
+      <button id="pause">Pause</button>
+      <span id="time">0.00 / 0.00</span>
+      <input id="seek" type="range" min="0" max="0" step="0.01" value="0" />
+    </section>
+
+    <section id="record-section">
+      <h2>Mic</h2>
+      <button id="enable-mic">Enable mic</button>
+    </section>
+
     <pre id="log"></pre>
     <script type="module" src="/src/main.ts"></script>
   </body>
