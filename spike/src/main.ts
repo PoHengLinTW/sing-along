@@ -1,4 +1,5 @@
 import { Engine, type EngineTrack } from './engine/engine';
+import { decodedBytes } from './engine/memory';
 import { encodeInWorker } from './encode/client';
 import { ChunkWriter, TakeStore } from './capture/store';
 import { Recorder } from './capture/recorder';
@@ -223,3 +224,33 @@ async function checkRecovery(): Promise<void> {
   }
 }
 void checkRecovery();
+
+// ---- M0-08: memory with N four-minute tracks (1 stereo + rest mono) ----
+$('mem-load').onclick = async () => {
+  const e = getEngine();
+  const n = +$<HTMLInputElement>('mem-n').value;
+  const sr = e.ctx.sampleRate;
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const channels = i === 0 ? 2 : 1;
+    const buf = e.ctx.createBuffer(channels, sr * 240, sr);
+    for (let c = 0; c < channels; c++) {
+      const d = buf.getChannelData(c);
+      const f = 110 * (1 + i * 0.12);
+      for (let k = 0; k < d.length; k++) d[k] = 0.1 * Math.sin((2 * Math.PI * f * k) / sr);
+    }
+    total += decodedBytes({ durationSec: 240, sampleRate: sr, channels });
+    renderTrack(e.addBuffer(`Synthetic ${i + 1}${channels === 2 ? ' (stereo)' : ''}`, buf, 0));
+    // yield so the tab stays responsive and a crash/reload is attributable to a track count
+    await new Promise((r) => setTimeout(r));
+    log(`Loaded ${i + 1}/${n}: ~${(total / 1e6).toFixed(0)} MB decoded PCM` + heapInfo());
+  }
+  $<HTMLInputElement>('seek').max = String(e.durationSec);
+  await e.play();
+  log(`Playing ${n} tracks. Listen for glitches; note peak memory in DevTools / Safari Web Inspector.`);
+};
+
+function heapInfo(): string {
+  const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+  return m ? `, JS heap ${(m.usedJSHeapSize / 1e6).toFixed(0)} MB` : '';
+}

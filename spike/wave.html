@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>wavesurfer evaluation (M0-07)</title>
+    <style>
+      body { font: 14px system-ui; max-width: 1000px; margin: 1rem auto; padding: 0 1rem; }
+      .lane { position: relative; height: 70px; border-bottom: 1px solid #ddd; overflow: hidden; }
+      .lane > div { position: absolute; top: 0; }
+      #b-stage { position: relative; overflow-x: auto; }
+      #b-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: red; pointer-events: none; }
+      pre { background: #f4f4f4; padding: .5rem; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>wavesurfer evaluation</h1>
+    <p><input id="files" type="file" accept="audio/*" multiple /> Pick the same 3 files. Optional start offsets (ms), comma separated: <input id="offsets" value="0,2000,4000" /></p>
+    <p><label>Zoom <input id="zoom" type="range" min="10" max="200" value="50" /></label></p>
+
+    <h2>(a) wavesurfer-multitrack plays audio (HTMLMediaElements)</h2>
+    <button id="a-play">Play / pause (a)</button> <button id="a-probe">Start drift probe (a)</button>
+    <div id="a-stage"></div>
+
+    <h2>(b) Our Web Audio engine plays; wavesurfer renders precomputed peaks only</h2>
+    <button id="b-play">Play / pause (b)</button> <button id="b-probe">Start sync probe (b)</button>
+    <div id="b-stage"><div id="b-lanes"></div><div id="b-playhead"></div></div>
+
+    <pre id="log"></pre>
+    <script type="module" src="/src/wave.ts"></script>
+  </body>
+</html>

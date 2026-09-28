@@ -34,6 +34,14 @@ Findings from the throwaway audio spike. Fill in as each task is verified by han
 
 ## wavesurfer decision (M0-07)
 
+**Decision: (b). Our Web Audio engine plays; wavesurfer.js only renders waveforms from precomputed peaks.**
+
+- **Packages:** wavesurfer.js latest is 8.0.1; the PRD says v7, so the spike pins `wavesurfer.js@^7` (7.12.12). The multitrack plugin is **not** part of wavesurfer.js v7/v8 any more: it is the separate package `wavesurfer-multitrack` 0.4.12 (BSD-3, last published 2024-07, depends on wavesurfer.js ^7.6.3). It plays through `HTMLMediaElement`s, has no mute/solo, and looks unmaintained.
+- **(a) multitrack plays audio** (Chromium 145 headless, 3 x 22 kHz mono tones, offsets 0/2000/4000 ms, 30 s): audio elements sit **~25 / ~205 / ~45 ms** away from the shared playhead from the first sample, and the offset did not shrink (205 -> 204 -> 212 ms). Not drift growth within 30 s, but a fixed misalignment that we cannot correct, plus the media-element scheduling risk in `tasks/README.md` #6.
+- **(b) our engine plays, wavesurfer renders**: AudioContext clock vs wall clock stayed within **-5.3 to +0.5 ms** over 30 s (no growth). Browser-reported output latency 37.8 ms (headless fake sink).
+- **Peaks-only rendering works**: `WaveSurfer.create({ peaks: [Float32Array], duration })` renders without fetching or decoding audio. Positioning by start offset works (we move the lane by `trackLeftPx`). `ws.zoom()` throws "No audio loaded" in this mode; use `ws.setOptions({ minPxPerSec })` instead.
+- **Deviation from the AC:** measured over 30 s, not 5 min, by agreement (drift can be handled if it shows up in production). Headless Chromium with a fake audio sink only: no Safari, no iPhone, nothing audible.
+
 ## Memory (M0-08)
 
 ## Go / no-go

@@ -11,12 +11,15 @@
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "fake-indexeddb": "^6.2.5",
+    "playwright": "^1.58.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
   },
   "dependencies": {
     "@audio/encode-flac": "^1.4.1",
-    "libflacjs": "^5.6.0"
+    "libflacjs": "^5.6.0",
+    "wavesurfer-multitrack": "^0.4.12",
+    "wavesurfer.js": "^7.12.12"
   }
 }
