@@ -39,3 +39,10 @@ export function playheadAt(a: { ctxTime: number; anchorCtxTime: number; anchorPl
 export function timelineAt(a: { ctxTime: number; anchorCtxTime: number; anchorPlayhead: number }): number {
   return a.anchorPlayhead + (a.ctxTime - a.anchorCtxTime);
 }
+
+export const LATENCY_MAX_MS = 500;
+
+export function clampLatencyMs(ms: number): number {
+  if (!Number.isFinite(ms)) return 0;
+  return Math.max(-LATENCY_MAX_MS, Math.min(LATENCY_MAX_MS, Math.round(ms)));
+}

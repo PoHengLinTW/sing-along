@@ -41,10 +41,20 @@ function renderTrack(t: EngineTrack): void {
       <label>Vol <input class="vol" type="range" min="0" max="1" step="0.01" value="1" /></label>
       <label><input class="mute" type="checkbox" /> Mute</label>
       <label><input class="solo" type="checkbox" /> Solo</label>
+    </div>
+    <div>
+      <label>Latency <output class="lat-out">0</output> ms (applies on next play/seek)
+        <input class="lat" type="range" min="-500" max="500" step="1" value="0" />
+      </label>
     </div>`;
   div.querySelector<HTMLInputElement>('.vol')!.oninput = (ev) => e.setVolume(t, +(ev.target as HTMLInputElement).value);
   div.querySelector<HTMLInputElement>('.mute')!.onchange = (ev) => e.setMuted(t, (ev.target as HTMLInputElement).checked);
   div.querySelector<HTMLInputElement>('.solo')!.onchange = (ev) => e.setSolo(t, (ev.target as HTMLInputElement).checked);
+  const lat = div.querySelector<HTMLInputElement>('.lat')!;
+  lat.oninput = () => {
+    e.setLatency(t, +lat.value);
+    div.querySelector('.lat-out')!.textContent = String(t.latencyOffsetMs);
+  };
   $('tracks').append(div);
 }
 
@@ -61,7 +71,13 @@ $<HTMLInputElement>('files').onchange = async (ev) => {
   $<HTMLInputElement>('seek').max = String(e.durationSec);
 };
 
-$('play').onclick = () => void getEngine().play();
+$('play').onclick = () => {
+  const e = getEngine();
+  void e.play().then(() => {
+    const l = e.reportedLatencyMs;
+    log(`Reported latency: base ${l.base.toFixed(1)} ms + output ${l.output.toFixed(1)} ms = ${(l.base + l.output).toFixed(1)} ms`);
+  });
+};
 $('pause').onclick = () => getEngine().pause();
 $<HTMLInputElement>('seek').oninput = (ev) => getEngine().seek(+(ev.target as HTMLInputElement).value);
 

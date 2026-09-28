@@ -53,3 +53,25 @@ describe('timelineAt', () => {
     expect(timelineAt({ ctxTime: 9.9, anchorCtxTime: 10, anchorPlayhead: 30 })).toBeCloseTo(29.9);
   });
 });
+
+import { clampLatencyMs, LATENCY_MAX_MS } from './timing';
+
+describe('clampLatencyMs', () => {
+  it('rounds to whole milliseconds', () => {
+    expect(clampLatencyMs(12.4)).toBe(12);
+  });
+  it('clamps to ±500 ms', () => {
+    expect(clampLatencyMs(900)).toBe(LATENCY_MAX_MS);
+    expect(clampLatencyMs(-900)).toBe(-LATENCY_MAX_MS);
+  });
+  it('treats NaN as 0', () => {
+    expect(clampLatencyMs(NaN)).toBe(0);
+  });
+});
+
+describe('placeTrack with latency', () => {
+  it('a +100 ms latency offset delays a take that starts at the playhead', () => {
+    const start = (0 + 100) / 1000;
+    expect(placeTrack({ playheadSec: 0, trackStartSec: start, durationSec: 5 })).toEqual({ delaySec: 0.1, bufferOffsetSec: 0 });
+  });
+});

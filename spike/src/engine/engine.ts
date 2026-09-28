@@ -1,4 +1,4 @@
-import { effectiveGain, placeTrack, timelineAt } from './timing';
+import { clampLatencyMs, effectiveGain, placeTrack, timelineAt } from './timing';
 
 export interface EngineTrack {
   id: string;
@@ -101,7 +101,7 @@ export class Engine {
 
   /** Latency changes apply on next play or seek (per task M0-05). */
   setLatency(t: EngineTrack, ms: number): void {
-    t.latencyOffsetMs = ms;
+    t.latencyOffsetMs = clampLatencyMs(ms);
   }
 
   setVolume(t: EngineTrack, v: number): void {
