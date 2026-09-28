@@ -106,7 +106,7 @@ A small, trusted singing group. Anyone who has the URL can use the app. There is
 - **A2 (stretch):** Automatic latency estimation (browser-reported latency and/or loopback click calibration).
 
 ### 5.8 Visualization
-- **V1:** A multitrack **waveform** view (wavesurfer.js v7 + multitrack plugin) with a zoomable, scrollable shared timeline.
+- **V1:** A multitrack **waveform** view (wavesurfer.js v7, rendering precomputed peaks only; playback is our own Web Audio engine, see CONCLUDE Q18) with a zoomable, scrollable shared timeline.
 - **V2:** **Peaks** are computed in the browser when a file is uploaded or a take is created, then stored with the track. Waveforms draw before the audio finishes loading.
 
 ### 5.9 Storage caps
@@ -174,7 +174,7 @@ Cloudflare Tunnel ──► Fastify API ──► PostgreSQL        Cloudflare R
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Anyone with the URL can delete anything | Data loss | Accepted. Typed-title confirmation. Soft delete is a stretch goal. |
-| Decoded audio held in RAM (~11.5 MB/min mono, 23 MB/min stereo) | ~500 MB for a typical project; may be tight on older phones or iOS | 10-track cap. Documented. |
+| Decoded audio held in RAM (~11.5 MB/min mono, 23 MB/min stereo) | ~500 MB for a typical project (M0 measured 466 MB decoded for 10 x 4 min at 44.1 kHz, 1 stereo + 9 mono); may be tight on older phones or iOS. iPhone limit not yet measured | 10-track cap. Documented. |
 | Round-trip latency differs by device, and Bluetooth is much worse | Takes land off-beat | Manual offset slider (v1), headphone hint, automatic calibration (stretch) |
 | iOS Safari quirks (AudioContext unlock, storage eviction, background suspension) | Playback, recording or offline cache problems | Test on iPhone from M0. Recommend installing the PWA. |
 | R2 free tier exceeded | Small bill | 8 GB global cap. Optional Cloudflare billing alert. |

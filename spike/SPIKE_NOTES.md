@@ -6,9 +6,11 @@ Findings from the throwaway audio spike. Fill in as each task is verified by han
 
 | Device | Browser | Mic prompt (M0-01) | Sample rate | getSettings (AEC/NS/AGC/channels) | Notes |
 |---|---|---|---|---|---|
-| Desktop | Chrome | | | | |
-| Desktop | Safari | | | | |
-| iPhone | Safari | | | | |
+| Desktop | Chrome | _manual_ | _manual_ | _manual_ | |
+| Desktop | Safari | _manual_ | _manual_ | _manual_ | |
+| iPhone | Safari | _manual_ | _manual_ | _manual_ | |
+
+Automated (Playwright, headless, `probe/`): FLAC and WAV output decode with `decodeAudioData` in **Chromium 145, Firefox 146, WebKit 26.0** (desktop). Mic capture could not be automated: `getUserMedia` never resolved in headless Chromium with the fake device, so the M0-03 and M0-06 real-browser checks are manual.
 
 ## Latency (M0-05)
 
@@ -32,6 +34,8 @@ Findings from the throwaway audio spike. Fill in as each task is verified by han
 
 ## Storage quota (M0-06)
 
+`navigator.storage.estimate()` quota (headless, so not representative of real profiles): Chromium ~1.7-2.3 GB, Firefox 10.7 GB, WebKit 1.05 GB. Real devices: _manual_ (logged on page load). Chunk persistence and recovery logic is covered by Vitest with fake-indexeddb; the real reload/kill test is manual.
+
 ## wavesurfer decision (M0-07)
 
 **Decision: (b). Our Web Audio engine plays; wavesurfer.js only renders waveforms from precomputed peaks.**
@@ -44,6 +48,29 @@ Findings from the throwaway audio spike. Fill in as each task is verified by han
 
 ## Memory (M0-08)
 
+Synthetic 10 x 4 min tracks (1 stereo + 9 mono) at 44.1 kHz, "Memory" section of the spike page:
+
+| Where | Result |
+|---|---|
+| Chromium 145 headless | Loaded and playing. **~466 MB decoded PCM**, JS heap ~468 MB. Formula: duration x rate x channels x 4 bytes (`engine/memory.ts`). At 48 kHz expect ~507 MB |
+| Safari desktop / iPhone | _manual_: note the highest track count that survives, and any reload/crash |
+
+If the iPhone can't hold 10 tracks, record the working count here and update the PRD risk table (it already flags iOS memory as a risk and now quotes the desktop figure).
+
 ## Go / no-go
 
+**Conditional GO** for the approach in `PRD.md`:
+- Proven by tests/probes: sync playback engine math, FLAC 16-bit mono encode and WAV fallback (decodes in 3 desktop engines), IndexedDB chunk persistence logic, peaks-only waveform rendering, 466 MB for the 10-track worst case on desktop.
+- **Still needed from you before M1 relies on it** (checklist below): mic capture and the 60 s sample count on real browsers, iPhone (mic prompt, encode time, memory, latency), audible sync/no-flam, crash recovery in a real tab, Bluetooth offsets. If mic capture fails on iPhone Safari, the recording approach is a no-go and needs rethinking.
+
+Manual checklist: `pnpm dev` in `spike/`, open `https://<lan-ip>:5173/`, then (1) load 3 files, play/pause/seek, listen for flams; (2) Record 60 s, check the "Take:" log line; (3) move the latency slider with a clap-along; (4) record, reload at 30 s, use "Recover"; (5) "Encode synthetic 4-min take" and note the FLAC ms; (6) Memory > load 10 tracks; fill the tables above.
+
 ## Code to port to M1/M2
+
+- `src/engine/timing.ts`, `engine.ts` (placement, solo/mute gain, playhead anchor math, latency clamp) -> M1 playback engine, with its tests.
+- `src/capture/recorder.worklet.ts`, `recorder.ts`, `take.ts` (worklet batching, first-frame timeline mapping, trim before zero) -> M2.
+- `src/capture/store.ts` (`TakeStore`, `ChunkWriter`) -> M2 drafts.
+- `src/encode/` (`pcm.ts`, `flac.ts`, worker + client) -> M2 encode step.
+- `src/waveform/peaks.ts` -> M1 peaks (V2).
+- `src/engine/memory.ts` -> optional client-side track-count warning.
+- Findings to carry over: use `setOptions({minPxPerSec})` not `zoom()` with peaks; input must reach the destination through a silent gain for the worklet to run; pin wavesurfer.js to ^7.

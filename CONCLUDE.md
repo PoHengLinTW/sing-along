@@ -293,3 +293,15 @@ A fullstack Progressive Web App for practicing group harmony singing:
   - Manual device checks for audio.
   - Lint + typecheck + tests in GitHub Actions CI.
 - **M0 spike is throwaway:** plain Vite + vanilla TS in `spike/`. Findings go into `SPIKE_NOTES.md`, and the audio engine code is ported to M1 deliberately.
+
+---
+
+## Q18: M0 spike findings
+
+**Decision:**
+- **Playback:** own Web Audio engine; wavesurfer.js v7 only renders precomputed peaks. The multitrack plugin is a separate stale package (`wavesurfer-multitrack` 0.4.12) that plays through media elements and showed a fixed ~25-205 ms misalignment between tracks in a Chromium probe. Our engine's clock stayed within ~5 ms of wall time.
+- **FLAC encoder:** libflacjs (asm.js build) in a Web Worker, WAV as the fallback. 4 min of mono took ~0.5-0.7 s on desktop; FLAC and WAV output decoded in Chromium, Firefox and WebKit (desktop, headless). iPhone timing still to be measured by hand.
+- **Not automated, still manual:** mic capture on real devices (getUserMedia hung with Chromium's fake device in headless mode), iPhone memory and latency, Bluetooth offsets, audible sync.
+- **Probe length:** drift was measured over 30 s instead of 5 min. If drift shows up in production, fix it then.
+
+Details and numbers: `spike/SPIKE_NOTES.md`.
