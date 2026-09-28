@@ -1,4 +1,5 @@
 import { Engine, type EngineTrack } from './engine/engine';
+import { encodeInWorker } from './encode/client';
 import { Recorder } from './capture/recorder';
 import { trimBeforeZero, takeDurationMs, type Take } from './capture/take';
 import { RAW_MIC_CONSTRAINTS, checkMicSupport, describeMicError } from './mic';
@@ -114,7 +115,49 @@ $('stop-record').onclick = async () => {
   const buf = e.ctx.createBuffer(1, take.samples.length, take.sampleRate);
   buf.copyToChannel(take.samples as Float32Array<ArrayBuffer>, 0);
   renderTrack(e.addBuffer(`Take ${takes.length}`, buf, take.startOffsetMs));
+  void encodeAndCheck(`take-${takes.length}`, take.samples, take.sampleRate);
   $<HTMLInputElement>('seek').max = String(e.durationSec);
   $<HTMLButtonElement>('record').disabled = false;
   $<HTMLButtonElement>('stop-record').disabled = true;
+};
+
+// ---- M0-04: encode take to FLAC (+ WAV fallback) in a worker, then prove the browser can decode both ----
+async function encodeAndCheck(label: string, samples: Float32Array, sampleRate: number): Promise<void> {
+  const secs = samples.length / sampleRate;
+  log(`Encoding ${label} (${secs.toFixed(1)}s @${sampleRate}Hz)...`);
+  const r = await encodeInWorker(samples, sampleRate);
+  const ctx = getEngine().ctx;
+  const check = async (name: string, bytes: Uint8Array, mime: string) => {
+    try {
+      const buf = await ctx.decodeAudioData(bytes.slice().buffer);
+      log(`  ${name}: decodeAudioData OK (${buf.duration.toFixed(2)}s, ${buf.numberOfChannels}ch, ${buf.sampleRate}Hz)`);
+    } catch (err) {
+      log(`  ${name}: decodeAudioData FAILED: ${(err as Error).message}`);
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mime }));
+    a.download = `${label}.${name.toLowerCase()}`;
+    a.textContent = `Download ${label}.${name.toLowerCase()} (${(bytes.length / 1e6).toFixed(2)} MB)`;
+    a.style.display = 'block';
+    $('downloads').append(a);
+  };
+  if (r.flac) {
+    log(`  FLAC: ${(r.flac.length / 1e6).toFixed(2)} MB (${(r.flac.length / 1e6 / (secs / 60)).toFixed(2)} MB/min) in ${r.flacMs!.toFixed(0)} ms`);
+    await check('FLAC', r.flac, 'audio/flac');
+  } else {
+    log(`  FLAC FAILED: ${r.flacError} -> falling back to WAV`);
+  }
+  log(`  WAV: ${(r.wav.length / 1e6).toFixed(2)} MB in ${r.wavMs.toFixed(0)} ms`);
+  await check('WAV', r.wav, 'audio/wav');
+}
+
+$('bench-encode').onclick = async () => {
+  const sr = getEngine().ctx.sampleRate;
+  const x = new Float32Array(sr * 240);
+  let seed = 1;
+  for (let i = 0; i < x.length; i++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    x[i] = (0.5 + 0.5 * Math.sin(i / 20000)) * (0.4 * Math.sin(i * 0.031) + 0.2 * Math.sin(i * 0.11)) + (seed / 2 ** 32 - 0.5) * 0.02;
+  }
+  await encodeAndCheck('bench-4min', x, sr);
 };
