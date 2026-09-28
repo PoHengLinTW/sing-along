@@ -1,5 +1,7 @@
 import { buildApp } from './app';
 import { type Config, ConfigError, loadConfig } from './config';
+import { createDb } from './db/client';
+import { createS3Client, S3Storage } from './storage/s3';
 
 let config: Config;
 try {
@@ -12,7 +14,9 @@ try {
   throw err;
 }
 
-const app = buildApp();
+const { db } = createDb(config.databaseUrl);
+const storage = new S3Storage(createS3Client(config.s3), config.s3.bucket);
+const app = buildApp({ db, storage });
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {
   console.error(err);
   process.exit(1);
