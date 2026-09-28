@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is still **planning only**. There is no source code or `package.json` yet (the git repo exists but has no commits). Implementation starts with milestone M0 (`tasks/M0.md`). Update this file as soon as real code, commands and structure exist, and delete the "planned" markers once they're true.
+This repo is still **planning only**. There is no source code or `package.json` yet (the git repo exists and holds only the planning docs). Implementation starts with milestone M0 (`tasks/M0.md`). Update this file as soon as real code, commands and structure exist, and delete the "planned" markers once they're true.
 
 ## Planning documents
 
