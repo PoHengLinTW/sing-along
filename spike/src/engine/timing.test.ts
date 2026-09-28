@@ -34,3 +34,22 @@ describe('effectiveGain', () => {
     expect(effectiveGain({ volume: 1, muted: true, solo: true }, true)).toBe(0);
   });
 });
+
+import { playheadAt } from './timing';
+
+describe('playheadAt', () => {
+  it('maps an AudioContext time to a playhead using the play anchor', () => {
+    expect(playheadAt({ ctxTime: 12.5, anchorCtxTime: 10, anchorPlayhead: 30 })).toBeCloseTo(32.5);
+  });
+  it('clamps to the anchor playhead before the start lead has elapsed', () => {
+    expect(playheadAt({ ctxTime: 9.95, anchorCtxTime: 10, anchorPlayhead: 30 })).toBe(30);
+  });
+});
+
+import { timelineAt } from './timing';
+
+describe('timelineAt', () => {
+  it('is unclamped: a frame captured before the play anchor maps to an earlier timeline position', () => {
+    expect(timelineAt({ ctxTime: 9.9, anchorCtxTime: 10, anchorPlayhead: 30 })).toBeCloseTo(29.9);
+  });
+});

@@ -1,4 +1,4 @@
-import { effectiveGain, placeTrack } from './timing';
+import { effectiveGain, placeTrack, timelineAt } from './timing';
 
 export interface EngineTrack {
   id: string;
@@ -63,6 +63,12 @@ export class Engine {
     if (!this.playing) return this.pausedPlayhead;
     const elapsed = Math.max(0, this.ctx.currentTime - this.anchorCtxTime); // 0 during the start lead
     return Math.min(this.anchorPlayhead + elapsed, this.durationSec);
+  }
+
+  /** Playhead (sec) at a given AudioContext time, e.g. the first captured frame. */
+  playheadAtCtxTime(ctxTime: number): number {
+    if (!this.playing) return this.pausedPlayhead;
+    return timelineAt({ ctxTime, anchorCtxTime: this.anchorCtxTime, anchorPlayhead: this.anchorPlayhead });
   }
 
   private trackStartSec(t: EngineTrack): number {

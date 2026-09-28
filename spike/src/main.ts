@@ -1,4 +1,6 @@
 import { Engine, type EngineTrack } from './engine/engine';
+import { Recorder } from './capture/recorder';
+import { trimBeforeZero, takeDurationMs, type Take } from './capture/take';
 import { RAW_MIC_CONSTRAINTS, checkMicSupport, describeMicError } from './mic';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -75,3 +77,44 @@ function tick(): void {
   requestAnimationFrame(tick);
 }
 tick();
+
+// ---- M0-03: capture at the playhead ----
+let recorder: Recorder | null = null;
+const takes: Take[] = [];
+
+$('record').onclick = async () => {
+  if (!support.ok) return log(`Cannot record: ${support.reason}`);
+  const e = getEngine();
+  await e.play(); // sets the play anchor; the first captured frame is mapped onto the timeline from it
+  recorder = new Recorder(e.ctx);
+  try {
+    const firstCtxTime = await recorder.start();
+    const startSec = e.playheadAtCtxTime(firstCtxTime);
+    recorder.startSec = startSec;
+    log(`Record settings: ${JSON.stringify(recorder.settings)}`);
+    log(`ctx.sampleRate=${e.ctx.sampleRate}; first frame @ctx ${firstCtxTime.toFixed(3)} => timeline ${startSec.toFixed(3)}s`);
+    $<HTMLButtonElement>('record').disabled = true;
+    $<HTMLButtonElement>('stop-record').disabled = false;
+  } catch (err) {
+    log(describeMicError(err as Error));
+    e.pause();
+  }
+};
+
+$('stop-record').onclick = async () => {
+  if (!recorder) return;
+  const e = getEngine();
+  const raw = await recorder.stop(0);
+  e.pause();
+  const t = trimBeforeZero(raw.samples, raw.sampleRate, recorder.startSec);
+  const take: Take = { samples: t.samples, sampleRate: raw.sampleRate, startOffsetMs: Math.round(t.startSec * 1000) };
+  recorder = null;
+  takes.push(take);
+  log(`Take: ${take.samples.length} samples @${take.sampleRate}Hz = ${(takeDurationMs(take.samples.length, take.sampleRate) / 1000).toFixed(3)}s, startOffset ${take.startOffsetMs}ms`);
+  const buf = e.ctx.createBuffer(1, take.samples.length, take.sampleRate);
+  buf.copyToChannel(take.samples as Float32Array<ArrayBuffer>, 0);
+  renderTrack(e.addBuffer(`Take ${takes.length}`, buf, take.startOffsetMs));
+  $<HTMLInputElement>('seek').max = String(e.durationSec);
+  $<HTMLButtonElement>('record').disabled = false;
+  $<HTMLButtonElement>('stop-record').disabled = true;
+};

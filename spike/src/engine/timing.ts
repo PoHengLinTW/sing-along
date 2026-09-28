@@ -30,3 +30,12 @@ export function effectiveGain(t: MixState, anySolo: boolean): number {
   if (anySolo && !t.solo) return 0;
   return t.volume;
 }
+
+export function playheadAt(a: { ctxTime: number; anchorCtxTime: number; anchorPlayhead: number }): number {
+  return a.anchorPlayhead + Math.max(0, a.ctxTime - a.anchorCtxTime);
+}
+
+/** Like playheadAt but unclamped: frames captured before the play anchor map to earlier timeline time. */
+export function timelineAt(a: { ctxTime: number; anchorCtxTime: number; anchorPlayhead: number }): number {
+  return a.anchorPlayhead + (a.ctxTime - a.anchorCtxTime);
+}
