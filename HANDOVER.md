@@ -1,4 +1,4 @@
-# Handover: M2 is built, waiting for the device pass
+# Handover: M2 is built and in review (PR #3)
 
 Written at the end of the M2 session (branch `m2-recording`, 2026-09-28) for the next Claude session.
 Read this after `CLAUDE.md` and before touching code. If something here disagrees with the code,
@@ -10,10 +10,10 @@ the code wins: fix this file.
 |---|---|
 | M0 spike (`spike/`) | Code done and unit-tested. Most acceptance criteria in `tasks/M0.md` are real-device, listening or measurement items and are still open. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
 | M1 core player | Implemented. 78 of 87 criteria ticked in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. Merged to `main`. |
-| M2 recording | **M2-01 to M2-10 implemented**, one commit each on branch `m2-recording` (not pushed, no PR yet). **M2-11 (manual device pass) is the user's job**: its checklist is in `tasks/M2.md`. Unticked M2 criteria all carry an `_(open: ...)_` note saying what only a device or an ear can settle. |
+| M2 recording | **Implemented and in review: PR #3** (`m2-recording` → `main`, `check` job green; check whether it has been merged). M2-01 to M2-10 are one commit each. **M2-11 desktop pass: confirmed by the user.** Still open in `tasks/M2.md`, each with an `_(open/Deferred: ...)_` note: the iPhone criteria (deferred by the user), Bluetooth delay numbers, and the desktop Safari / Android Chrome leg. |
 | M3, M4 | Not started. E2E (Playwright) is first required in M3 and must cover the M1 and M2 user flows. |
 
-Gate on the branch at the end: `pnpm lint && pnpm typecheck && pnpm test` green (shared 31, api 66, web 543).
+Gate at the end of the branch (and CI on the PR): `pnpm lint && pnpm typecheck && pnpm test` green (shared 31, api 66, web 543).
 
 ## 2. How we work (rules that were enforced, not just written)
 
@@ -27,10 +27,11 @@ Mic setup and permission errors, input picker, headphone hint → AudioWorklet c
 
 Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in `spike/probe/`): `m2-record-smoke.mjs` 24/24 (record over a track, live lane painted, mute, stop, real FLAC worker, draft, latency, upload, server row has FLAC + `latencyOffsetMs -50`, crash recovery), `m2-take-length.mjs` (60 s take = 59 996 ms), `m2-encode-worker.mjs` (built worker in Chromium/Firefox/WebKit, 4 min take encodes in 0.5-0.7 s, FLAC decodes).
 
-## 4. What only the user can do (real devices), and honest limits
+## 4. What is verified, what is not, and honest limits
 
-- Run the **M2-11 checklist** in `tasks/M2.md` on desktop Chrome, desktop Safari, iPhone Safari (and Android Chrome if available), with wired and Bluetooth headphones. Nothing audible has been judged: alignment by ear, glitches while recording, mute silence, Bluetooth delay numbers (README "Known issues" wants them).
-- **iPhone is out of scope for now (user decision, 2026-09-28).** The iPhone criteria in `tasks/M2.md` are marked deferred, not passed; M3/M4 must not assume they were verified. Desktop was confirmed by the user.
+- The user ran the M2-11 checklist on **desktop** and reported it all fine (devices not itemised, so only desktop-settled criteria were ticked). The checklist stays in `tasks/M2.md` if a re-run is wanted.
+- **iPhone is out of scope for now (user decision, 2026-09-28).** The iPhone criteria in `tasks/M2.md` are marked deferred, not passed; M3/M4 must not assume they were verified. Note that testing on a phone would need HTTPS and phone-reachable storage URLs (dev presigned URLs point at `localhost:9000`); that comes with M3's deploy.
+- Still open and wanted: Bluetooth delay numbers for the README "Known issues"; desktop Safari and Android Chrome record → upload → play.
 - Never verified on real hardware: mic capture on iPhone/desktop Safari, iPhone CPU while recording with the live waveform, iPhone FLAC encode time (desktop is under a second), a screen lock or app switch mid-take, real Safari playback of the encoded FLAC.
 - Known gaps, by choice: drafts have no label editor (labels are set on the uploaded track); a lost response after a successful confirm could create a duplicate track on retry; only ready drafts get lanes (recording/encoding show in the live lane and `EncodeStatus`).
 - mp3/m4a decoding was never tested per browser even though uploads accept them.
@@ -58,7 +59,6 @@ Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in 
 
 ## 7. Suggested first steps for the next session
 
-1. `git status`, read `CLAUDE.md`, this file, `tasks/M2.md` (M2-11 section).
-2. If the user has run the device pass: fix or ticket what they found (`tasks/M2.md` M2-11), tick the boxes they confirm, add Bluetooth numbers to the README.
-3. Push `m2-recording` and open the PR (the user has not asked for that yet; ask), wait for the `check` job, merge, pull `main` before starting M3.
-4. Consider the audit items in section 5, in order, as small commits before or at the start of M3. M3 needs the Playwright suite covering the M1 and M2 flows: `spike/probe/m2-record-smoke.mjs` is a good starting script for the recording flow.
+1. `git status`, read `CLAUDE.md`, this file. Check PR #3 (`gh pr view 3`): if it is merged, `git checkout main && git pull` and start a new branch; if not, the user merges it (`main` is protected and the user has not asked for anyone else to merge).
+2. If the user brings Bluetooth numbers or Safari/Android results: add them to the README "Known issues" and tick the matching boxes in `tasks/M2.md`.
+3. Consider the audit items in section 5, in order, as small commits before or at the start of M3 (start with the loop leak and Play-at-end: both touch code recording uses). M3 needs the Playwright suite covering the M1 and M2 flows: `spike/probe/m2-record-smoke.mjs` is a good starting script for the recording flow.
