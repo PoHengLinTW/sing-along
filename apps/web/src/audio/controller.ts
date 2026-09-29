@@ -76,6 +76,16 @@ export class AudioController {
     this.store.setState({ position: this.engine.position });
   }
 
+  /** Back to the start; keeps playing if it was playing (the engine restarts its sources). */
+  restart(): void {
+    this.seek(0);
+  }
+
+  /** Relative seek, clamped to [0, duration]. Reaching the end while playing stops on the next frame. */
+  skip(deltaSec: number): void {
+    this.seek(this.engine.position + deltaSec);
+  }
+
   private syncDuration(): void {
     this.store.setState({ duration: this.engine.duration });
   }

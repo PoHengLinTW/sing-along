@@ -21,6 +21,20 @@
   right: 0;
   margin: 0;
 }
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+.transport button {
+  min-width: 2.4rem;
+  font-size: 1.1rem;
+}
+.transport .time {
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.5rem;
+}
 .panels {
   padding-top: 1px; /* the timeline scroller has a 1px border */
 }

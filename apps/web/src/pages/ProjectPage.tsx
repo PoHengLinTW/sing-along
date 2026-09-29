@@ -2,6 +2,7 @@ import type { ProjectDetail } from '@sing-along/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
+import { TransportBar } from '../audio/TransportBar';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { Timeline } from '../timeline/Timeline';
 import { NotFound } from './NotFound';
@@ -28,6 +29,7 @@ export function ProjectPage() {
   return (
     <section>
       <ProjectHeader project={query.data} />
+      <TransportBar />
       <div className="workspace">
         <TrackPanels project={query.data} />
         <Timeline tracks={query.data.tracks} />
