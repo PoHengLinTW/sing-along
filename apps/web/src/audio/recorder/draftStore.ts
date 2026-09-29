@@ -17,11 +17,13 @@ export interface Draft {
   peaks?: number[];
   durationMs?: number;
   labelIds?: number[];
+  /** Leading samples that fall before timeline 0: dropped by the encoder. */
+  trimSamples?: number;
 }
 
 export type NewDraft = Pick<
   Draft,
-  'projectId' | 'startOffsetMs' | 'sampleRate' | 'name' | 'performer'
+  'projectId' | 'startOffsetMs' | 'sampleRate' | 'name' | 'performer' | 'trimSamples'
 >;
 
 interface ChunkRow {
@@ -60,6 +62,8 @@ function concat(chunks: Float32Array[]): Float32Array {
  * keeps the take. Drafts are kept per project (indexed by projectId).
  */
 export class DraftStore {
+  private lastCreatedAt = 0;
+
   private constructor(private db: IDBDatabase) {}
 
   static async open(name = 'sing-along-drafts'): Promise<DraftStore> {
@@ -73,11 +77,14 @@ export class DraftStore {
   }
 
   async createDraft(input: NewDraft): Promise<Draft> {
+    // Strictly increasing, so drafts made in the same millisecond still list in creation order.
+    const createdAt = Math.max(Date.now(), this.lastCreatedAt + 1);
+    this.lastCreatedAt = createdAt;
     const draft: Draft = {
       ...input,
       id: crypto.randomUUID(),
       latencyOffsetMs: 0,
-      createdAt: Date.now(),
+      createdAt,
       status: 'recording',
     };
     const tx = this.db.transaction('drafts', 'readwrite');

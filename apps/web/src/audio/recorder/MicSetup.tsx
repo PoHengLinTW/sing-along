@@ -96,7 +96,8 @@ export function MicSetup({ mediaDevices }: Props) {
           </select>
         </label>
       )}
-      {error && <p role="alert">{micErrorMessage(error)}</p>}
+      {error === 'unsupported' && <p className="mic-note">{micErrorMessage(error)}</p>}
+      {error && error !== 'unsupported' && <p role="alert">{micErrorMessage(error)}</p>}
     </div>
   );
 }

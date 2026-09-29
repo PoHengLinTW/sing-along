@@ -5,6 +5,7 @@ import {
   positionAt,
   type Segment,
 } from './loop';
+import { timelineSecAt } from './recorder/timing';
 import { audibleGain, projectDuration, trackStartSec } from './schedule';
 
 export interface AddTrackInput {
@@ -58,6 +59,7 @@ export class AudioEngine {
   private pausedPlayhead = 0;
   private loop: LoopRegion | null = null;
   private timerId: number | null = null;
+  private openEnded = false;
   playing = false;
 
   constructor(
@@ -80,7 +82,18 @@ export class AudioEngine {
 
   get position(): number {
     if (!this.playing) return this.pausedPlayhead;
-    return Math.min(positionAt(this.segments, this.ensureContext().currentTime), this.duration);
+    const raw = positionAt(this.segments, this.ensureContext().currentTime);
+    return this.openEnded ? raw : Math.min(raw, this.duration);
+  }
+
+  /** While recording, the playhead may run past the last track (the take can be the longest). */
+  setOpenEnded(openEnded: boolean): void {
+    this.openEnded = openEnded;
+  }
+
+  /** Timeline position at an AudioContext time (unclamped); null while paused. */
+  timelineAt(ctxTime: number): number | null {
+    return this.playing ? timelineSecAt(this.segments, ctxTime) : null;
   }
 
   addTrack(input: AddTrackInput): void {

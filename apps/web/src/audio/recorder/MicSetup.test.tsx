@@ -64,7 +64,9 @@ describe('MicSetup', () => {
 
   it('reports a browser without getUserMedia', async () => {
     render(<MicSetup mediaDevices={undefined} />);
-    expect((await screen.findByRole('alert')).textContent).toMatch(/not available|https/i);
+    // A note, not an alert: it is on the page for everyone, whether or not they mean to record.
+    expect(screen.getByText(/not available/i)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows the headphone hint until "Don\'t show again" is pressed', async () => {

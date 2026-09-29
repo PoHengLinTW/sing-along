@@ -12,6 +12,7 @@ interface Frames {
 /** Glue between the engine (Web Audio) and the transport store (what React reads). */
 export class AudioController {
   private frameId: number | null = null;
+  private isRecording = false;
 
   constructor(
     readonly engine: AudioEngine,
@@ -30,6 +31,25 @@ export class AudioController {
         if (state.byId[id] !== prev.byId[id]) this.applyMix(id);
       }
     });
+  }
+
+  /** True from beginRecording to endRecording: seeking, looping and pausing are locked. */
+  get recording(): boolean {
+    return this.isRecording;
+  }
+
+  /** Playback continues as the backing for a take: no loop, no seeking, and the playhead may pass the end. */
+  beginRecording(): void {
+    this.isRecording = true;
+    this.engine.setOpenEnded(true);
+    this.engine.setLoop(null);
+  }
+
+  endRecording(): void {
+    this.pause();
+    this.isRecording = false;
+    this.engine.setOpenEnded(false);
+    this.applyLoop(); // the user's A–B loop applies again from the next play
   }
 
   private applyMix(id: number): void {
@@ -68,17 +88,20 @@ export class AudioController {
   }
 
   async toggle(): Promise<void> {
+    if (this.isRecording) return;
     if (this.engine.playing) this.pause();
     else await this.play();
   }
 
   seek(sec: number): void {
+    if (this.isRecording) return;
     this.engine.seek(sec);
     this.store.setState({ position: this.engine.position });
   }
 
   /** A region made by dragging on the ruler: creates and enables the loop. False if it is too short. */
   setLoopRegion(region: LoopRegion): boolean {
+    if (this.isRecording) return false;
     const valid = makeLoop(region.a, region.b);
     if (!valid) return false;
     this.store.setState({ loop: valid, loopEnabled: true, loopA: null });
@@ -91,6 +114,7 @@ export class AudioController {
    * without one, A is remembered and B completes the region. False when B is rejected.
    */
   setLoopPoint(edge: 'a' | 'b'): boolean {
+    if (this.isRecording) return false;
     const position = this.engine.position;
     const { loop, loopA, duration } = this.store.getState();
     if (loop) {
@@ -107,6 +131,7 @@ export class AudioController {
   }
 
   toggleLoop(): void {
+    if (this.isRecording) return;
     const { loop, loopEnabled } = this.store.getState();
     if (!loop) return;
     this.store.setState({ loopEnabled: !loopEnabled });
@@ -114,12 +139,14 @@ export class AudioController {
   }
 
   clearLoop(): void {
+    if (this.isRecording) return;
     this.store.setState({ loop: null, loopEnabled: false, loopA: null });
     this.applyLoop();
   }
 
   /** Move an edge of the existing region to `sec` (dragging its handle). */
   adjustLoopEdge(edge: 'a' | 'b', sec: number): void {
+    if (this.isRecording) return;
     const { loop, duration } = this.store.getState();
     if (!loop) return;
     this.store.setState({ loop: adjustEdge(loop, edge, sec, duration) });
@@ -151,7 +178,7 @@ export class AudioController {
       this.frameId = null;
       const { duration } = this.store.getState();
       const position = this.engine.position;
-      if (duration > 0 && position >= duration) {
+      if (!this.isRecording && duration > 0 && position >= duration) {
         // reached the end: stop and park on the last frame
         this.engine.pause();
         this.store.setState({ playing: false, position: duration });

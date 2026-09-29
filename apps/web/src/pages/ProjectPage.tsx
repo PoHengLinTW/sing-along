@@ -1,14 +1,18 @@
 import type { ProjectDetail } from '@sing-along/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
+import { MicSetup } from '../audio/recorder/MicSetup';
+import { recordingStore } from '../audio/recorder/recordingStore';
+import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
 import { TransportBar } from '../audio/TransportBar';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
 import { Timeline } from '../timeline/Timeline';
+import { useToast } from '../ui/toast';
 import { LabelFilterBar } from './LabelFilterBar';
 import { NotFound } from './NotFound';
 import { ProjectHeader } from './ProjectHeader';
@@ -26,6 +30,22 @@ export function ProjectPage() {
     meta: { handles404: true },
   });
 
+  const toast = useToast();
+  useEffect(() => {
+    setAutoStopHandler(() =>
+      toast.error('Recording stopped: a take can be at most 10 minutes. It was kept as a draft.'),
+    );
+    return () => setAutoStopHandler(null);
+  }, [toast]);
+  // Declared before useProjectAudio so a running take ends (and unlocks the transport) before
+  // that hook's cleanup pauses and rewinds.
+  useEffect(
+    () => () => {
+      if (recordingStore.getState().status === 'recording') getRecordingSession().stopIfRecording();
+    },
+    [],
+  );
+
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
   useProjectAudio(query.data?.tracks ?? EMPTY);
   const trackIds = useMemo(() => query.data?.tracks.map((t) => t.id), [query.data?.tracks]);
@@ -42,7 +62,8 @@ export function ProjectPage() {
   return (
     <section>
       <ProjectHeader project={query.data} />
-      <TransportBar />
+      <TransportBar projectId={query.data.id} />
+      <MicSetup />
       <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
       <p className="mix-actions">
         <button
