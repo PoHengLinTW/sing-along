@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import { registerErrorHandler } from './errors';
 import { registerLabelRoutes } from './routes/labels';
 import { registerProjectRoutes } from './routes/projects';
+import { registerStorageRoutes } from './routes/storage';
 import { registerTrackRoutes } from './routes/tracks';
 import type { Storage } from './storage/types';
 
@@ -23,5 +24,6 @@ export function buildApp(deps: Deps) {
   registerProjectRoutes(app, deps);
   registerTrackRoutes(app, deps);
   registerLabelRoutes(app, deps);
+  registerStorageRoutes(app, deps);
   return app;
 }

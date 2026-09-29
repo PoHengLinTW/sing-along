@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { apiFetch } from '../api/client';
 import { formatRelativeTime } from '../lib/time';
+import { useStorageUsage } from '../lib/useStorageUsage';
 import { CreateProjectDialog } from './CreateProjectDialog';
+import { StorageMeter } from './StorageMeter';
 
 export function Home() {
   const [creating, setCreating] = useState(false);
@@ -12,6 +14,8 @@ export function Home() {
     queryKey: ['projects'],
     queryFn: () => apiFetch<ProjectListItem[]>('/api/projects'),
   });
+
+  const storage = useStorageUsage();
 
   return (
     <section>
@@ -21,6 +25,8 @@ export function Home() {
           Create project
         </button>
       </div>
+
+      {storage.data && <StorageMeter usage={storage.data} />}
 
       {query.isPending && (
         <ul className="project-list" aria-label="Projects" aria-busy="true">

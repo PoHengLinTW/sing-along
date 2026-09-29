@@ -68,7 +68,10 @@ describe('Home: project list', () => {
 
   it('shows an error state with a retry button that refetches', async () => {
     let calls = 0;
-    stubApi(() => (++calls === 1 ? json(500, { message: 'boom' }) : json(200, [item()])));
+    stubApi((url) => {
+      if (url !== '/api/projects') return json(500, { message: 'no storage here' });
+      return ++calls === 1 ? json(500, { message: 'boom' }) : json(200, [item()]);
+    });
     renderHome();
     await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('link', { name: /Amazing Grace/ })).toBeTruthy();
@@ -146,5 +149,50 @@ describe('Home: create project', () => {
     await userEvent.type(within(dialog).getByLabelText('Title'), 'ok');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
     expect(await within(dialog).findByText('Server says no')).toBeTruthy();
+  });
+});
+
+describe('Home: storage indicator', () => {
+  const usage = (usedBytes: number) => ({
+    usedBytes,
+    limitBytes: 8 * 1024 ** 3,
+    projectCount: 1,
+    projectLimit: 100,
+    maxFileBytes: 60 * 1024 * 1024,
+    maxTrackMs: 600_000,
+    maxTracksPerProject: 10,
+  });
+
+  it('shows how much storage is used', async () => {
+    stubApi((url) =>
+      url === '/api/storage' ? json(200, usage(Math.round(5.2 * 1024 ** 3))) : json(200, []),
+    );
+    renderHome();
+    expect(await screen.findByText('5.2 / 8 GB used')).toBeTruthy();
+  });
+
+  it('refreshes after a project is created', async () => {
+    let used = 1024 ** 3;
+    const f = stubApi((url, init) => {
+      if (url === '/api/storage') return json(200, usage(used));
+      if (init?.method === 'POST') {
+        used = 2 * 1024 ** 3;
+        return json(201, { id: 5, title: 'New', artist: null, notes: null, tracks: [] });
+      }
+      return json(200, []);
+    });
+    renderHome();
+    expect(await screen.findByText('1 / 8 GB used')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Create your first project' }));
+    await userEvent.type(screen.getByLabelText(/title/i), 'New');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(f.mock.calls.filter((c) => c[0] === '/api/storage').length).toBe(2));
+  });
+
+  it('stays quiet when the usage cannot be loaded', async () => {
+    stubApi((url) => (url === '/api/storage' ? json(500, { message: 'x' }) : json(200, [])));
+    renderHome();
+    await screen.findByText(/no projects yet/i);
+    expect(screen.queryByText(/GB used/)).toBeNull();
   });
 });

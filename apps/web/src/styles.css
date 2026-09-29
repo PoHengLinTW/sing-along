@@ -211,3 +211,21 @@ button.danger {
   pointer-events: none;
   z-index: 2;
 }
+.storage-meter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 1rem;
+}
+.storage-meter progress {
+  flex: 0 1 12rem;
+  height: 0.6rem;
+  accent-color: #2e7d32;
+}
+.storage-meter progress[data-level="warn"] {
+  accent-color: #e69100;
+}
+.storage-meter progress[data-level="full"] {
+  accent-color: #b3261e;
+}
