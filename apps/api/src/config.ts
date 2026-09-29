@@ -40,6 +40,10 @@ const envSchema = z.object({
       'must be a cron pattern such as "30 3 * * *", or "off"',
     )
     .default('30 3 * * *'),
+  /** Built web app to serve (the Docker image sets it). Unset in dev, where Vite serves the app. */
+  WEB_DIST_DIR: z.string().min(1).optional(),
+  /** Drizzle migrations folder; defaults to the one in the source tree. */
+  MIGRATIONS_DIR: z.string().min(1).optional(),
   PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
@@ -57,6 +61,8 @@ export interface Config {
   publicOrigin: string;
   presignTtlSec: number;
   caps: Caps;
+  webDir?: string;
+  migrationsDir?: string;
   /** null = the nightly cleanup is switched off. */
   cleanupCron: string | null;
 }
@@ -90,6 +96,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     publicOrigin: e.PUBLIC_ORIGIN,
     presignTtlSec: e.PRESIGN_TTL_SECONDS,
+    webDir: e.WEB_DIST_DIR,
+    migrationsDir: e.MIGRATIONS_DIR,
     cleanupCron: e.CLEANUP_CRON === 'off' ? null : e.CLEANUP_CRON,
     caps: {
       maxFileBytes: Math.floor(e.MAX_FILE_MB * 1024 * 1024),

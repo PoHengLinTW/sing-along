@@ -60,6 +60,18 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...valid, CLEANUP_CRON: 'every night' })).toThrow(/CLEANUP_CRON/);
   });
 
+  it('serves no web app and uses the source migrations unless told otherwise', () => {
+    const c = loadConfig(valid);
+    expect(c.webDir).toBeUndefined();
+    expect(c.migrationsDir).toBeUndefined();
+  });
+
+  it('reads WEB_DIST_DIR and MIGRATIONS_DIR (set by the Docker image)', () => {
+    const c = loadConfig({ ...valid, WEB_DIST_DIR: '/app/web', MIGRATIONS_DIR: '/app/drizzle' });
+    expect(c.webDir).toBe('/app/web');
+    expect(c.migrationsDir).toBe('/app/drizzle');
+  });
+
   it('rejects a non-positive cap', () => {
     expect(() => loadConfig({ ...valid, MAX_PROJECTS: '0' })).toThrow(/MAX_PROJECTS/);
   });
