@@ -98,6 +98,26 @@ describe('DraftStore', () => {
   });
 });
 
+describe('DraftStore change notifications', () => {
+  it('notifies on create, update, delete and recovery, but not on chunk appends', async () => {
+    const fn = vi.fn();
+    const stop = store.subscribe(fn);
+    const d = await store.createDraft(base);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await store.appendChunks(d.id, 0, [chunk(2, 1)]);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await store.updateDraft(d.id, { name: 'x' });
+    expect(fn).toHaveBeenCalledTimes(2);
+    await store.recoverInterrupted(1);
+    expect(fn).toHaveBeenCalledTimes(3); // the recovered draft was updated
+    await store.deleteDraft(d.id);
+    expect(fn).toHaveBeenCalledTimes(4);
+    stop();
+    await store.createDraft(base);
+    expect(fn).toHaveBeenCalledTimes(4);
+  });
+});
+
 describe('ChunkWriter', () => {
   it('flushes buffered chunks to the store about once a second, in order', async () => {
     // Only the interval: fake-indexeddb schedules its own work with other timers.

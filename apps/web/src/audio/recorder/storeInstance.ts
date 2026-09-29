@@ -7,3 +7,8 @@ export function getDraftStore(): Promise<DraftStore> {
   storePromise ??= DraftStore.open();
   return storePromise;
 }
+
+/** Test hook: forget the opened store so the next call opens a fresh database. */
+export function resetDraftStoreForTests(): void {
+  storePromise = null;
+}

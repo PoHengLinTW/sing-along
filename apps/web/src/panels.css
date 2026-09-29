@@ -241,3 +241,28 @@ button[aria-pressed="true"] {
   margin: 0.25rem 0;
   font-size: 0.9rem;
 }
+.draft-lane {
+  border: 2px dashed #64748b;
+  background: #64748b14;
+}
+.draft-badge {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #64748b;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lane-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+}
+.draft-panel {
+  border: 1px dashed #64748b;
+  border-radius: 6px;
+}

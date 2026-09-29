@@ -4,6 +4,7 @@ import { useStore } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
 import { type AudioController, getAudioController } from '../audio/controller';
 import { adjustEdge, type LoopRegion } from '../audio/loop';
+import type { DraftView } from '../audio/recorder/draftView';
 import { type LiveWave, liveWave } from '../audio/recorder/liveWave';
 import { type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
 import { type StatusState, trackStatusStore } from '../audio/sync';
@@ -16,6 +17,7 @@ import { Waveform } from './Waveform';
 
 interface Props {
   tracks: TrackDto[];
+  drafts?: DraftView[];
   controller?: Pick<AudioController, 'seek' | 'setLoopRegion' | 'adjustLoopEdge'>;
   transport?: StoreApi<TransportState>;
   view?: StoreApi<ViewState>;
@@ -40,6 +42,7 @@ const ZOOM_STEP = 1.25;
 
 export function Timeline({
   tracks,
+  drafts = [],
   controller,
   transport = transportStore,
   view = viewStore,
@@ -74,6 +77,7 @@ export function Timeline({
   const contentSec = Math.max(
     transportDuration,
     showLiveLane ? liveEndSec + 1 : 0,
+    ...drafts.map((d) => (d.startOffsetMs + d.latencyOffsetMs + d.durationMs) / 1000),
     ...tracks.map((t) => (t.startOffsetMs + t.latencyOffsetMs + t.durationMs) / 1000),
   );
   const contentPx = secToPx(contentSec, pxPerSec);
@@ -251,6 +255,9 @@ export function Timeline({
           {tracks.map((track) => (
             <Lane key={track.id} track={track} pxPerSec={pxPerSec} status={status} />
           ))}
+          {drafts.map((d) => (
+            <DraftLane key={d.id} draft={d} pxPerSec={pxPerSec} status={status} />
+          ))}
           {showLiveLane && (
             <div
               className="recording-lane"
@@ -323,6 +330,41 @@ function Lane({
       {state !== 'ready' && (
         <div role="status" className="lane-status">
           {state === 'error' ? "Couldn't load audio" : 'Loading audio…'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DraftLane({
+  draft,
+  pxPerSec,
+  status,
+}: {
+  draft: DraftView;
+  pxPerSec: number;
+  status: StoreApi<StatusState>;
+}) {
+  const state = useStore(status, (s) => s.byId[draft.engineId]);
+  const left = secToPx((draft.startOffsetMs + draft.latencyOffsetMs) / 1000, pxPerSec);
+  const width = secToPx(draft.durationMs / 1000, pxPerSec);
+  return (
+    <div
+      className="lane draft-lane"
+      data-testid={`lane-draft-${draft.id}`}
+      style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
+    >
+      <Waveform
+        peaks={draft.peaks}
+        durationSec={draft.durationMs / 1000}
+        pxPerSec={pxPerSec}
+        color="#64748b"
+        height={LANE_HEIGHT}
+      />
+      <span className="draft-badge lane-badge">Draft</span>
+      {state === 'error' && (
+        <div role="status" className="lane-status">
+          Couldn't load audio
         </div>
       )}
     </div>

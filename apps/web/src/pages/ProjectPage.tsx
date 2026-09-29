@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
+import { draftEngineId } from '../audio/recorder/draftView';
 import { EncodeStatus } from '../audio/recorder/EncodeStatus';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
 import { recordingStore } from '../audio/recorder/recordingStore';
 import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
+import { useDrafts } from '../audio/recorder/useDrafts';
 import { TransportBar } from '../audio/TransportBar';
+import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
@@ -50,7 +53,17 @@ export function ProjectPage() {
 
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
   useProjectAudio(query.data?.tracks ?? EMPTY);
-  const trackIds = useMemo(() => query.data?.tracks.map((t) => t.id), [query.data?.tracks]);
+  const { drafts, loaded: draftsLoaded } = useDrafts(Number(id));
+  useDraftAudio(drafts);
+  // Drafts count as "known" ids for mix persistence, but only once they have loaded: pruning
+  // against an empty list would forget their remembered mix.
+  const trackIds = useMemo(
+    () =>
+      query.data && draftsLoaded
+        ? [...query.data.tracks.map((t) => t.id), ...drafts.map((d) => draftEngineId(d.id))]
+        : undefined,
+    [query.data, drafts, draftsLoaded],
+  );
   useMixPersistence(id === undefined ? undefined : Number(id), trackIds);
   const visible = useMemo(
     () => filterByLabels(query.data?.tracks ?? EMPTY, filter),
@@ -79,8 +92,13 @@ export function ProjectPage() {
         </button>
       </p>
       <div className="workspace">
-        <TrackPanels project={query.data} visible={visible} reorderDisabled={filter.length > 0} />
-        <Timeline tracks={visible} />
+        <TrackPanels
+          project={query.data}
+          visible={visible}
+          drafts={drafts}
+          reorderDisabled={filter.length > 0}
+        />
+        <Timeline tracks={visible} drafts={drafts} />
       </div>
       <UploadPanel projectId={query.data.id} />
     </section>

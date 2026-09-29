@@ -63,6 +63,7 @@ function concat(chunks: Float32Array[]): Float32Array {
  */
 export class DraftStore {
   private lastCreatedAt = 0;
+  private listeners = new Set<() => void>();
 
   private constructor(private db: IDBDatabase) {}
 
@@ -74,6 +75,16 @@ export class DraftStore {
       db.createObjectStore('chunks', { keyPath: ['draftId', 'index'] });
     };
     return new DraftStore(await req(open));
+  }
+
+  /** Called after a draft is created, changed or deleted (not for chunk appends). */
+  subscribe(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private notify(): void {
+    for (const fn of this.listeners) fn();
   }
 
   async createDraft(input: NewDraft): Promise<Draft> {
@@ -90,6 +101,7 @@ export class DraftStore {
     const tx = this.db.transaction('drafts', 'readwrite');
     tx.objectStore('drafts').put(draft);
     await done(tx);
+    this.notify();
     return draft;
   }
 
@@ -116,6 +128,7 @@ export class DraftStore {
     const next = { ...current, ...patch, id };
     os.put(next);
     await done(tx);
+    this.notify();
     return next;
   }
 
@@ -149,6 +162,7 @@ export class DraftStore {
     tx.objectStore('drafts').delete(id);
     tx.objectStore('chunks').delete(chunkRange(id));
     await done(tx);
+    this.notify();
   }
 
   /**

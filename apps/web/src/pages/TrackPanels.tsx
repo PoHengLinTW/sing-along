@@ -3,24 +3,30 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { apiFetch } from '../api/client';
-import { mixerStore, useMix } from '../audio/mixerStore';
+import { mixerStore } from '../audio/mixerStore';
+import type { DraftView } from '../audio/recorder/draftView';
 import { recordingStore } from '../audio/recorder/recordingStore';
 import { moveBefore, moveByOffset } from '../lib/reorder';
 import { LANE_HEIGHT, LANE_MARGIN, RULER_HEIGHT } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
 import { LabelChip } from '../ui/LabelChip';
+import { DraftPanel } from './DraftPanel';
 import { LabelEditor } from './LabelEditor';
+import { MixControls } from './MixControls';
 
 export function TrackPanels({
   project,
   visible,
   reorderDisabled,
+  drafts = [],
 }: {
   project: ProjectDetail;
   /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
   visible: TrackDto[];
   reorderDisabled: boolean;
+  /** Takes not uploaded yet: listed below the uploaded tracks. */
+  drafts?: DraftView[];
 }) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
@@ -88,6 +94,9 @@ export function TrackPanels({
           onMove={(offset) => applyOrder(moveByOffset(ids, track.id, offset))}
         />
       ))}
+      {drafts.map((d) => (
+        <DraftPanel key={d.id} draft={d} />
+      ))}
       {isRecording && (
         <div
           className="track-panel recording-panel"
@@ -121,7 +130,6 @@ function TrackPanel({
   onMove,
 }: PanelProps) {
   const qc = useQueryClient();
-  const mix = useMix(track.id);
   const [confirming, setConfirming] = useState(false);
   const [editingLabels, setEditingLabels] = useState(false);
 
@@ -211,31 +219,7 @@ function TrackPanel({
           ＋
         </button>
       </div>
-      <div className="panel-mix">
-        <input
-          type="range"
-          aria-label="Volume"
-          min={0}
-          max={150}
-          step={1}
-          value={Math.round(mix.volume * 100)}
-          onChange={(e) => mixerStore.getState().setVolume(track.id, Number(e.target.value) / 100)}
-        />
-        <span className="vol-readout">{Math.round(mix.volume * 100)}%</span>
-        <button
-          type="button"
-          aria-pressed={mix.muted}
-          onClick={() => mixerStore.getState().toggleMute(track.id)}
-        >
-          Mute
-        </button>
-        <button
-          type="button"
-          aria-pressed={mix.solo}
-          onClick={() => mixerStore.getState().toggleSolo(track.id)}
-        >
-          Solo
-        </button>
+      <MixControls id={track.id}>
         <button
           type="button"
           className="danger"
@@ -244,7 +228,7 @@ function TrackPanel({
         >
           🗑
         </button>
-      </div>
+      </MixControls>
       <LabelEditor
         open={editingLabels}
         track={track}
