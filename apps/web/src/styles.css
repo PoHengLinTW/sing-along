@@ -130,3 +130,28 @@ dialog input:not([type]) {
 button.danger {
   color: #b3261e;
 }
+.upload-panel {
+  border: 2px dashed #8886;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.upload-items {
+  list-style: none;
+  padding: 0;
+}
+.upload-items li {
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+}
+.chip-choice {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-right: 0.75rem;
+}
+.hint {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}

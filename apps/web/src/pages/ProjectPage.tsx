@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { NotFound } from './NotFound';
 import { ProjectHeader } from './ProjectHeader';
+import { UploadPanel } from './UploadPanel';
 
 export function ProjectPage() {
   const { id } = useParams();
@@ -20,6 +21,7 @@ export function ProjectPage() {
   return (
     <section>
       <ProjectHeader project={query.data} />
+      <UploadPanel projectId={query.data.id} />
     </section>
   );
 }

@@ -1,0 +1,23 @@
+// Throwaway smoke: create a project and upload a file through the real UI against the dev stack.
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await (await browser.newContext()).newPage();
+page.on('console', (m) => ['error', 'warning'].includes(m.type()) && console.log('console.' + m.type(), m.text()));
+page.on('pageerror', (e) => console.log('pageerror', e.message));
+page.on('requestfailed', (r) => console.log('requestfailed', r.url().slice(0, 80), r.failure()?.errorText));
+await page.goto('http://localhost:5173/');
+await page.getByRole('button', { name: 'Create project' }).click();
+await page.getByLabel('Title').fill('Smoke ' + Date.now());
+await page.getByRole('button', { name: 'Create', exact: true }).click();
+await page.waitForURL(/\/project\/\d+/);
+const id = page.url().split('/').pop();
+await page.getByLabel(/add audio files/i).setInputFiles('/private/tmp/claude-501/-Users-henrylin-ai-sing-along/83ed5b80-c7ac-4a95-8e65-1e7120665c7f/scratchpad/short.wav');
+await page.getByRole('checkbox', { name: 'Alto' }).check();
+await page.getByRole('button', { name: 'Upload', exact: true }).click();
+await page.waitForFunction(() => !document.querySelector('.upload-items li'), null, { timeout: 30000 });
+const res = await (await fetch('http://localhost:5173/api/projects/' + id)).json();
+console.log('tracks:', res.tracks.length, res.tracks[0] && { name: res.tracks[0].name, dur: res.tracks[0].durationMs, size: res.tracks[0].sizeBytes, labels: res.tracks[0].labels.map((l) => l.name), peaks: res.tracks[0].peaks.length, key: undefined });
+const au = await (await fetch('http://localhost:5173/api/tracks/' + res.tracks[0].id + '/audio-url')).json();
+const dl = await fetch(au.url);
+console.log('download via presigned GET:', dl.status, (await dl.arrayBuffer()).byteLength, 'bytes');
+await browser.close();
