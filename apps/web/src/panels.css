@@ -288,3 +288,13 @@ button[aria-pressed="true"] {
   color: #e11d48;
   font-size: 0.8rem;
 }
+.record .elapsed {
+  margin-left: 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+.mic-mute.muted {
+  background: #e11d48;
+  border-color: #e11d48;
+  color: #fff;
+  background-image: repeating-linear-gradient(45deg, #0000 0 6px, #ffffff33 6px 12px);
+}

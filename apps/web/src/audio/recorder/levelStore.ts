@@ -5,10 +5,12 @@ import { blockPeak, type LevelBlock, type LevelState, updateLevel } from './leve
 export interface LevelStoreState extends LevelState {
   /** Input check is on (the mic is open without a take). */
   monitoring: boolean;
+  /** The microphone is muted during an input check (a take's mute lives in the recording store). */
+  muted: boolean;
 }
 
 export const createLevelStore = () =>
-  createStore<LevelStoreState>(() => ({ level: 0, clipUntil: 0, monitoring: false }));
+  createStore<LevelStoreState>(() => ({ level: 0, clipUntil: 0, monitoring: false, muted: false }));
 export const levelStore = createLevelStore();
 export const useLevels = <T>(selector: (s: LevelStoreState) => T): T =>
   useStore(levelStore, selector);
@@ -21,7 +23,7 @@ export function feedLevel(
   store.setState(updateLevel(store.getState(), blockPeak(block), nowMs));
 }
 
-/** The mic is closed: the bar drops to empty and any clip warning is dropped. */
+/** The mic is closed: the bar drops to empty, any clip warning is dropped, the mute is undone. */
 export function clearLevel(store: ReturnType<typeof createLevelStore>): void {
-  store.setState({ level: 0, clipUntil: 0 });
+  store.setState({ level: 0, clipUntil: 0, muted: false });
 }

@@ -55,4 +55,31 @@ describe('InputMonitor', () => {
     monitor.stop();
     expect(rec.close).not.toHaveBeenCalled();
   });
+
+  it('muting the input check silences the meter and shows the muted state', async () => {
+    const { store, monitor, emit } = setup();
+    await monitor.start(null);
+    monitor.setMuted(true);
+    expect(store.getState().muted).toBe(true);
+    emit({ min: -1, max: 1, frames: 1024, capturing: false }); // would clip, but the mic is muted
+    expect(store.getState().level).toBe(0);
+    expect(store.getState().clipUntil).toBe(0);
+    monitor.setMuted(false);
+    emit({ min: -0.5, max: 0.5, frames: 1024, capturing: false });
+    expect(store.getState().level).toBe(0.5);
+  });
+
+  it('stop unmutes, so the next check starts live', async () => {
+    const { store, monitor } = setup();
+    await monitor.start(null);
+    monitor.setMuted(true);
+    monitor.stop();
+    expect(store.getState().muted).toBe(false);
+  });
+
+  it('setMuted does nothing when not monitoring', () => {
+    const { store, monitor } = setup();
+    monitor.setMuted(true);
+    expect(store.getState().muted).toBe(false);
+  });
 });

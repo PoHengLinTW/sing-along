@@ -3,7 +3,7 @@ import { useStore } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
 import { formatClock, formatTransportTime } from '../timeline/math';
 import { type AudioController, getAudioController } from './controller';
-import { RecordButton } from './recorder/RecordButton';
+import { RecordControls } from './recorder/RecordControls';
 import { type RecordingState, recordingStore } from './recorder/recordingStore';
 import { transportShortcut } from './shortcuts';
 import { type TransportState, transportStore } from './transportStore';
@@ -90,7 +90,7 @@ export function TransportBar({
       </button>
       <TimeDisplay transport={transport} />
       <LoopControls controller={ctl} transport={transport} locked={locked} />
-      {projectId !== undefined && <RecordButton projectId={projectId} recording={recording} />}
+      {projectId !== undefined && <RecordControls projectId={projectId} recording={recording} />}
     </div>
   );
 }

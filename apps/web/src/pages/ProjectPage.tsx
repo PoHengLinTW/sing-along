@@ -11,6 +11,7 @@ import { MicSetup } from '../audio/recorder/MicSetup';
 import { recordingStore } from '../audio/recorder/recordingStore';
 import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
 import { useDrafts } from '../audio/recorder/useDrafts';
+import { useLeaveGuard } from '../audio/recorder/useLeaveGuard';
 import { TransportBar } from '../audio/TransportBar';
 import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
@@ -37,6 +38,7 @@ export function ProjectPage() {
     meta: { handles404: true },
   });
 
+  useLeaveGuard(); // "Leave site?" while a take is running
   const toast = useToast();
   useEffect(() => {
     setAutoStopHandler(() =>

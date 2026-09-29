@@ -28,10 +28,22 @@ export class InputMonitor {
   }
 
   private async open(deviceId: string | null): Promise<void> {
-    const recorder = this.deps.createRecorder((l) => feedLevel(this.deps.levels, l));
+    const recorder = this.deps.createRecorder((l) =>
+      // A muted mic reads as silence: no bar, and no clip warning from a signal nobody is using.
+      feedLevel(
+        this.deps.levels,
+        this.deps.levels.getState().muted ? { min: 0, max: 0, frames: l.frames } : l,
+      ),
+    );
     await recorder.open(deviceId);
     this.recorder = recorder;
     this.deps.levels.setState({ monitoring: true });
+  }
+
+  /** Mutes the input check (only meaningful while it is running). */
+  setMuted(muted: boolean): void {
+    if (!this.recorder) return;
+    this.deps.levels.setState(muted ? { muted, level: 0, clipUntil: 0 } : { muted });
   }
 
   stop(): void {
