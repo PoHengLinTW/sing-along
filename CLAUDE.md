@@ -16,6 +16,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - The engine plays the timeline as scheduled "segments" on the AudioContext clock; loops are scheduled ahead so wraps have no gap. The position lives in a zustand store written per animation frame: read it with selectors or a store subscription, never from broad React state.
 - Never run long waits without a timeout; and gate every commit on `pnpm lint && pnpm typecheck && pnpm test`.
 
+## Handover (read this first in a new session)
+
+`HANDOVER.md` is a note from the previous session to the next one: current state of each milestone, what to build on, open audit findings, what only the user can verify on real devices, environment gotchas, and suggested first steps. **At the start of every new session, read `HANDOVER.md` after this file** and run `git status` (another session may have uncommitted work in the tree). If you finish a stretch of work and another session will pick it up, update `HANDOVER.md` (keep it short and current: replace stale facts, don't append a diary). If it disagrees with the code, the code wins; fix the note.
+
 ## Planning documents
 
 | File | Role |
