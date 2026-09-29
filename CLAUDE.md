@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0** (audio spike, `spike/`) is done apart from manual device checks (see `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. **M2** (recording) is implemented (M2-01 to M2-10, on branch `m2-recording`); what is left is M2-11, the manual device pass (see its checklist in `tasks/M2.md`). Caps/deploy (M3) and PWA (M4) are not built yet. Update this file as real code and commands land.
+**M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. **M2** (recording) is implemented (branch `m2-recording`, PR #3) and its desktop device pass is confirmed; the iPhone criteria are deferred by the user, and Bluetooth numbers plus desktop Safari / Android Chrome are still open (see `tasks/M2.md`). Caps/deploy (M3) and PWA (M4) are not built yet. Update this file as real code and commands land.
 
 ### Where things are (M1)
 

@@ -8,7 +8,7 @@ the code wins: fix this file.
 
 | Milestone | State |
 |---|---|
-| M0 spike (`spike/`) | Code done and unit-tested. Most acceptance criteria in `tasks/M0.md` are real-device, listening or measurement items and are still open. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
+| M0 spike (`spike/`) | Work continued in the `m0-completion` worktree (merged as PR #4). **11 of 32 acceptance criteria ticked** in `tasks/M0.md`; real-device and listening checks remain. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
 | M1 core player | Implemented. 78 of 87 criteria ticked in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. Merged to `main`. |
 | M2 recording | **Implemented and in review: PR #3** (`m2-recording` → `main`, `check` job green; check whether it has been merged). M2-01 to M2-10 are one commit each. **M2-11 desktop pass: confirmed by the user.** Still open in `tasks/M2.md`, each with an `_(open/Deferred: ...)_` note: the iPhone criteria (deferred by the user), Bluetooth delay numbers, and the desktop Safari / Android Chrome leg. |
 | M3, M4 | Not started. E2E (Playwright) is first required in M3 and must cover the M1 and M2 user flows. |
@@ -35,6 +35,9 @@ Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in 
 - Never verified on real hardware: mic capture on iPhone/desktop Safari, iPhone CPU while recording with the live waveform, iPhone FLAC encode time (desktop is under a second), a screen lock or app switch mid-take, real Safari playback of the encoded FLAC.
 - Known gaps, by choice: drafts have no label editor (labels are set on the uploaded track); a lost response after a successful confirm could create a duplicate track on retry; only ready drafts get lanes (recording/encoding show in the live lane and `EncodeStatus`).
 - mp3/m4a decoding was never tested per browser even though uploads accept them.
+- FLAC encoder choice: `libflacjs` asm.js was chosen after a comparison with Mediabunny WASM in three headless desktop engines (`spike/SPIKE_NOTES.md`); iPhone timing was never measured.
+- Chromium's fake microphone reports two channels even when one is requested; the recorder reads channel 0 of a mono worklet input, so takes are mono regardless. Real microphones are untested.
+- Another session may be working on M0 follow-ups (the `m0-completion` worktree, `spike/`). Run `git status` first and do not overwrite or revert changes you did not make.
 
 ## 5. Open items from the earlier audits (not touched in M2; fix or consciously defer)
 
