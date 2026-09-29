@@ -6,6 +6,7 @@ import { type AudioController, getAudioController } from '../audio/controller';
 import { adjustEdge, type LoopRegion } from '../audio/loop';
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
+import { waveformColor } from '../lib/labels';
 import { followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
 import { type ViewState, viewStore } from './viewStore';
 import { Waveform } from './Waveform';
@@ -26,11 +27,10 @@ type Gesture =
 /** Pointer movement under this many px is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 
-export const LANE_HEIGHT = 112;
+export const LANE_HEIGHT = 136;
 export const LANE_MARGIN = 2;
 /** Height of the ruler including its border: the track panel column starts below it. */
 export const RULER_HEIGHT = 25;
-const NEUTRAL_COLOR = '#94a3b8';
 const ZOOM_STEP = 1.25;
 
 export function Timeline({
@@ -275,7 +275,7 @@ function Lane({
   const state = useStore(status, (s) => s.byId[track.id]);
   const left = secToPx((track.startOffsetMs + track.latencyOffsetMs) / 1000, pxPerSec);
   const width = secToPx(track.durationMs / 1000, pxPerSec);
-  const color = track.labels[0]?.color ?? NEUTRAL_COLOR;
+  const color = waveformColor(track);
   return (
     <div
       className="lane"

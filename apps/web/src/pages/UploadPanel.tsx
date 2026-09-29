@@ -1,11 +1,12 @@
-import type { LabelDto } from '@sing-along/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { apiFetch } from '../api/client';
 import { putWithProgress } from '../api/put';
 import { type UploadDeps, uploadTrack } from '../api/upload';
 import { getAudioController } from '../audio/controller';
 import { defaultTrackName, resolveAudioMime } from '../lib/audioFile';
+import { useLabels } from '../lib/useLabels';
+import { LabelPicker } from '../ui/LabelPicker';
 
 const PERFORMER_KEY = 'sing-along:performer';
 const ACCEPT = '.mp3,.m4a,.aac,.wav,.ogg,.opus,.webm,.flac,audio/*';
@@ -58,10 +59,7 @@ export function UploadPanel({
   const chain = useRef<Promise<void>>(Promise.resolve());
   const nextKey = useRef(1);
 
-  const labels = useQuery({
-    queryKey: ['labels'],
-    queryFn: () => apiFetch<LabelDto[]>('/api/labels'),
-  });
+  const { labels, create: createLabel } = useLabels();
 
   const update = (key: number, patch: Partial<Item>) => {
     itemsRef.current = itemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i));
@@ -203,22 +201,12 @@ export function UploadPanel({
               </label>
               <fieldset disabled={!idle}>
                 <legend>Labels</legend>
-                {labels.data?.map((l) => (
-                  <label key={l.id} className="chip-choice">
-                    <input
-                      type="checkbox"
-                      checked={item.labelIds.includes(l.id)}
-                      onChange={(e) =>
-                        update(item.key, {
-                          labelIds: e.target.checked
-                            ? [...item.labelIds, l.id]
-                            : item.labelIds.filter((x) => x !== l.id),
-                        })
-                      }
-                    />
-                    {l.name}
-                  </label>
-                ))}
+                <LabelPicker
+                  labels={labels}
+                  selectedIds={item.labelIds}
+                  onChange={(ids) => update(item.key, { labelIds: ids })}
+                  onCreate={createLabel}
+                />
               </fieldset>
               {item.status === 'uploading' && (
                 <p>

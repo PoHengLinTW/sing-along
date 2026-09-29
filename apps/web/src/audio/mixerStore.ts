@@ -15,6 +15,7 @@ export interface MixerState {
   get(id: number): TrackMix;
   setVolume(id: number, volume: number): void;
   toggleMute(id: number): void;
+  setMuted(id: number, muted: boolean): void;
   toggleSolo(id: number): void;
   /** Drop a deleted track's state. */
   forget(id: number): void;
@@ -31,6 +32,7 @@ export const createMixerStore = () =>
       get: (id) => get().byId[id] ?? DEFAULT_MIX,
       setVolume: (id, volume) => patch(id, { volume: Math.min(MAX_VOLUME, Math.max(0, volume)) }),
       toggleMute: (id) => patch(id, { muted: !get().get(id).muted }),
+      setMuted: (id, muted) => patch(id, { muted }),
       toggleSolo: (id) => patch(id, { solo: !get().get(id).solo }),
       forget: (id) =>
         set((s) => {

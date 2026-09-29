@@ -86,6 +86,67 @@
   z-index: 1;
   pointer-events: none;
 }
+.panel-labels {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 22px;
+  overflow: hidden;
+}
+.label-chip {
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.edit-labels {
+  padding: 0 4px;
+  line-height: 1.2;
+}
+.label-filter {
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+.label-filter-item {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.label-filter-chip {
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 999px;
+  background: none;
+}
+.label-filter-chip[aria-pressed="true"] {
+  background: #2563eb;
+  color: #fff;
+}
+.label-picker input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+.label-options {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  max-height: 14rem;
+  overflow: auto;
+}
+.chip-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin: 0 0.35rem;
+}
 .panels {
   padding-top: 1px; /* the timeline scroller has a 1px border */
 }

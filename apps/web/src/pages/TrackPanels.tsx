@@ -7,8 +7,19 @@ import { moveBefore, moveByOffset } from '../lib/reorder';
 import { LANE_HEIGHT, LANE_MARGIN, RULER_HEIGHT } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
+import { LabelChip } from '../ui/LabelChip';
+import { LabelEditor } from './LabelEditor';
 
-export function TrackPanels({ project }: { project: ProjectDetail }) {
+export function TrackPanels({
+  project,
+  visible,
+  reorderDisabled,
+}: {
+  project: ProjectDetail;
+  /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
+  visible: TrackDto[];
+  reorderDisabled: boolean;
+}) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
   const dragId = useRef<number | null>(null);
@@ -57,11 +68,12 @@ export function TrackPanels({ project }: { project: ProjectDetail }) {
   return (
     <div className="panels">
       <div style={{ height: RULER_HEIGHT }} />
-      {project.tracks.map((track) => (
+      {visible.map((track) => (
         <TrackPanel
           key={track.id}
           track={track}
           projectKey={key}
+          reorderDisabled={reorderDisabled}
           onSaved={(updated) => patchTrack(track.id, updated)}
           onDragStart={() => {
             dragId.current = track.id;
@@ -79,6 +91,7 @@ export function TrackPanels({ project }: { project: ProjectDetail }) {
 
 interface PanelProps {
   track: TrackDto;
+  reorderDisabled: boolean;
   projectKey: (string | number)[];
   onSaved: (updated: TrackDto) => void;
   onDragStart: () => void;
@@ -86,10 +99,19 @@ interface PanelProps {
   onMove: (offset: -1 | 1) => void;
 }
 
-function TrackPanel({ track, projectKey, onSaved, onDragStart, onDrop, onMove }: PanelProps) {
+function TrackPanel({
+  track,
+  projectKey,
+  reorderDisabled,
+  onSaved,
+  onDragStart,
+  onDrop,
+  onMove,
+}: PanelProps) {
   const qc = useQueryClient();
   const mix = useMix(track.id);
   const [confirming, setConfirming] = useState(false);
+  const [editingLabels, setEditingLabels] = useState(false);
 
   const save = async (patch: { name?: string; performer?: string }) => {
     onSaved(await apiFetch<TrackDto>(`/api/tracks/${track.id}`, { method: 'PATCH', body: patch }));
@@ -117,13 +139,13 @@ function TrackPanel({ track, projectKey, onSaved, onDragStart, onDrop, onMove }:
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop();
+        if (!reorderDisabled) onDrop();
       }}
     >
       <div className="panel-top">
         <span
           className="drag-handle"
-          draggable
+          draggable={!reorderDisabled}
           role="img"
           aria-label={`Drag to reorder ${track.name}`}
           title="Drag to reorder"
@@ -137,10 +159,22 @@ function TrackPanel({ track, projectKey, onSaved, onDragStart, onDrop, onMove }:
           onSave={(v) => save({ name: v })}
           validate={(v) => (v.trim() ? null : 'Name is required')}
         />
-        <button type="button" aria-label={`Move ${track.name} up`} onClick={() => onMove(-1)}>
+        <button
+          type="button"
+          aria-label={`Move ${track.name} up`}
+          disabled={reorderDisabled}
+          title={reorderDisabled ? 'Clear the label filter to reorder' : undefined}
+          onClick={() => onMove(-1)}
+        >
           ↑
         </button>
-        <button type="button" aria-label={`Move ${track.name} down`} onClick={() => onMove(1)}>
+        <button
+          type="button"
+          aria-label={`Move ${track.name} down`}
+          disabled={reorderDisabled}
+          title={reorderDisabled ? 'Clear the label filter to reorder' : undefined}
+          onClick={() => onMove(1)}
+        >
           ↓
         </button>
       </div>
@@ -151,6 +185,20 @@ function TrackPanel({ track, projectKey, onSaved, onDragStart, onDrop, onMove }:
         onSave={(v) => save({ performer: v })}
         placeholder="Performer"
       />
+      <div className="panel-labels">
+        {track.labels.map((l) => (
+          <LabelChip key={l.id} label={l} />
+        ))}
+        <button
+          type="button"
+          className="edit-labels"
+          aria-label={`Edit labels for ${track.name}`}
+          title="Edit labels"
+          onClick={() => setEditingLabels(true)}
+        >
+          ＋
+        </button>
+      </div>
       <div className="panel-mix">
         <input
           type="range"
@@ -185,6 +233,12 @@ function TrackPanel({ track, projectKey, onSaved, onDragStart, onDrop, onMove }:
           🗑
         </button>
       </div>
+      <LabelEditor
+        open={editingLabels}
+        track={track}
+        onClose={() => setEditingLabels(false)}
+        onSaved={onSaved}
+      />
       <ConfirmDialog
         open={confirming}
         title="Delete track?"
