@@ -313,3 +313,15 @@ Details and numbers: `spike/SPIKE_NOTES.md`.
 **Decision:**
 - **RustFS** (`rustfs/rustfs`) replaces MinIO in `docker-compose.dev.yml`. MinIO's official images (`minio/minio`, `minio/mc`, quay.io) can no longer be pulled. Verified against RustFS before adopting: a presigned PUT signed with `Content-Length` and `Content-Type` returns 403 on a different size or type, HEAD returns size and type, and CORS works with `RUSTFS_CORS_ALLOWED_ORIGINS`. The bucket is created by a one-shot `amazon/aws-cli` container. Host ports: Postgres 5433 (5432 is often taken), S3 9000, API 3100 (3000 is often taken).
 - **Biome** replaces ESLint + typescript-eslint + Prettier. typescript-eslint did not support TypeScript 7, which had forced us onto TypeScript 5. Biome parses TypeScript itself, so the repo runs on TypeScript 7. `biome migrate` rewrote `recommended: true` to `preset: none`, which silently disables every rule; it is set to `recommended` and checked with a deliberately bad file.
+
+---
+
+## Q20: M1 implementation decisions
+
+**Decision (details are in each task's commit message):**
+- **Loops** are scheduled ahead on the AudioContext clock as back-to-back segments (`start(when, offset, duration)`), so the A→B wrap has no gap (limit: 50 ms). Editing the loop while playing hands over at `now + 100 ms`, without a jump.
+- **Label filter** shows a track when it has at least one of the chosen labels; it only hides rows (hidden tracks keep playing and keep their mute state). Reordering is disabled while a filter is active. "Mute all <label>" reaches hidden tracks too.
+- **Mix persistence** (`sing-along:mix:<projectId>` in localStorage) covers volume, mute, solo and zoom; deleted tracks are pruned; "Reset mix" resets the mix but not the zoom. It is never sent to the server.
+- **Track order / labels** are saved through explicit endpoints; the order request needs the full id list, saved optimistically with rollback and a toast.
+- **Bad uploads:** confirm deletes both the object and the pending row when the object is missing or its size differs.
+- **Verified in a real browser** (throwaway Playwright probes in `spike/probe/`, headless Chromium against the dev stack): create project, upload three labelled tracks, play in sync, mix, seek, loop wrap, reload restores the mix, deletes ask for confirmation, no console errors. Audible checks and Safari/iPhone are still manual.

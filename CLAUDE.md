@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-M0 (audio spike, `spike/`) is done apart from manual device checks. M1 is in progress: the monorepo scaffold (M1-01) and local infra (M1-02) exist; the product features do not yet. Sections below marked "planned" describe the target architecture. Update this file as real code and commands land, and delete the "planned" markers once they're true.
+**M0** (audio spike, `spike/`) is done apart from manual device checks (see `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. Recording (M2), caps/deploy (M3) and PWA (M4) are not built yet. The architecture below is real for M1 and still a plan for the parts marked "(M2+)". Update this file as real code and commands land.
+
+### Where things are (M1)
+
+- `apps/api/src`: `app.ts` (Fastify built from injected `{db, storage}`), `routes/` (projects, tracks, labels), `db/` (Drizzle schema, seed, repo queries), `storage/` (`Storage` interface + S3 impl), `config.ts` (zod-validated env), `errors.ts` (`{message, fields?}` error shape).
+- `apps/web/src`: `audio/` (engine, pure scheduling and loop math, controller, zustand transport and mixer stores, sync, shortcuts, mix persistence), `timeline/` (waveform view, ruler, zoom, follow), `pages/` (Home, ProjectPage, panels, upload, labels), `ui/` (Modal, ConfirmDialog, EditableText, LabelPicker, toasts), `api/` (typed fetch, upload, XHR PUT), `lib/` (pure helpers).
+- `packages/shared/src`: zod schemas and types shared by both apps (projects, tracks, labels, audio MIME map).
+- Tests: Vitest everywhere. API tests use a throwaway Postgres database per file (`createTestDb`) and a fake storage, plus one integration test against the real S3 stand-in (skipped if it is not running); start both with `docker compose -f docker-compose.dev.yml up -d`. Web tests use a fake `AudioContext` (`audio/fake.ts`) and mock `wavesurfer.js`.
+- Ports: web 5173, API 3100 (3000 and 5432 are often taken locally), Postgres 5433, S3 9000.
+- The engine plays the timeline as scheduled "segments" on the AudioContext clock; loops are scheduled ahead so wraps have no gap. The position lives in a zustand store written per animation frame: read it with selectors or a store subscription, never from broad React state.
+- Never run long waits without a timeout; and gate every commit on `pnpm lint && pnpm typecheck && pnpm test`.
 
 ## Planning documents
 
@@ -19,7 +29,7 @@ M0 (audio spike, `spike/`) is done apart from manual device checks. M1 is in pro
 
 When a decision changes: update `PRD.md`, add the decision and rationale to `CONCLUDE.md`, and adjust the affected task's acceptance criteria. Don't let these documents drift apart.
 
-## Planned architecture (from PRD §6)
+## Architecture (PRD §6)
 
 - **What it is:** A public multitrack harmony-practice PWA. **No accounts, no permissions, by design.** Anyone with the URL can edit or delete anything. Don't add auth, backups or rate limiting unless asked; they were explicitly declined.
 - **Monorepo (pnpm workspaces):**
@@ -27,8 +37,8 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
   - `apps/api`: Fastify + Drizzle + PostgreSQL
   - `packages/shared`: types, zod schemas, pure logic such as the LRC parser
 - **Audio never passes through the API.** The browser uploads to and downloads from Cloudflare R2 directly with **presigned URLs**. The flow is `upload-url` (cap checks, creates a `pending` track, returns a PUT URL signed with the exact Content-Length) → PUT → `confirm` (HEAD check, marks the track `active`). RustFS (an S3-compatible store; MinIO images are no longer published) stands in for R2 in dev and CI.
-- **Playback:** Uses our own Web Audio engine (`AudioBufferSourceNode` + a GainNode per track). wavesurfer.js only *renders* waveforms from precomputed peaks (pending the M0-07 finding). A track plays at `start_offset_ms + latency_offset_ms`. The scheduling, solo and loop math are pure functions with unit tests.
-- **Recording:**
+- **Playback:** Uses our own Web Audio engine (`AudioBufferSourceNode` + a GainNode per track). wavesurfer.js only *renders* waveforms from precomputed peaks (decided in M0-07; pinned to v7). A track plays at `start_offset_ms + latency_offset_ms`. The scheduling, solo and loop math are pure functions with unit tests.
+- **Recording (M2+, not built yet; the spike proved the approach):**
   - AudioWorklet mono capture with echoCancellation, noiseSuppression and autoGainControl **off**.
   - PCM chunks are written to IndexedDB *during* recording, so a crash doesn't lose the take.
   - On Stop, a Web Worker encodes FLAC 16-bit mono with WASM (WAV as the fallback).
@@ -43,7 +53,7 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
 ```bash
 pnpm dev                                        # web + api; web proxies /api
 pnpm lint && pnpm typecheck && pnpm test        # CI runs these (lint = Biome; TypeScript 7)
-pnpm --filter <web|api|shared> test -- <file>   # single test file (Vitest)
+pnpm --filter <web|api|shared> exec vitest run <file>   # single test file (Vitest)
 docker compose -f docker-compose.dev.yml up     # local Postgres + RustFS (S3)
 pnpm db:generate && pnpm db:migrate             # Drizzle migrations
 pnpm cleanup --dry-run                          # orphan/pending storage cleanup preview
