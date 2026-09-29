@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
+import { mixerStore } from '../audio/mixerStore';
 import { TransportBar } from '../audio/TransportBar';
+import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
 import { Timeline } from '../timeline/Timeline';
@@ -26,6 +28,8 @@ export function ProjectPage() {
 
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
   useProjectAudio(query.data?.tracks ?? EMPTY);
+  const trackIds = useMemo(() => query.data?.tracks.map((t) => t.id), [query.data?.tracks]);
+  useMixPersistence(id === undefined ? undefined : Number(id), trackIds);
   const visible = useMemo(
     () => filterByLabels(query.data?.tracks ?? EMPTY, filter),
     [query.data?.tracks, filter],
@@ -40,6 +44,15 @@ export function ProjectPage() {
       <ProjectHeader project={query.data} />
       <TransportBar />
       <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
+      <p className="mix-actions">
+        <button
+          type="button"
+          title="Volume, mute and solo of every track back to 100% / off (this browser only)"
+          onClick={() => mixerStore.getState().reset()}
+        >
+          Reset mix
+        </button>
+      </p>
       <div className="workspace">
         <TrackPanels project={query.data} visible={visible} reorderDisabled={filter.length > 0} />
         <Timeline tracks={visible} />
