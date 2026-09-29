@@ -155,3 +155,59 @@ button.danger {
   opacity: 0.7;
   font-size: 0.85rem;
 }
+.timeline-controls {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+}
+.timeline-scroll {
+  overflow-x: auto;
+  border: 1px solid #8884;
+  border-radius: 8px;
+}
+.timeline-content {
+  position: relative;
+  min-width: 100%;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.ruler {
+  position: relative;
+  height: 24px;
+  border-bottom: 1px solid #8884;
+  user-select: none;
+}
+.tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding-left: 4px;
+  border-left: 1px solid #8886;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+.lane {
+  position: relative; /* `left` is the track's offset on the timeline */
+  overflow: hidden;
+  background: #8881;
+  margin: 2px 0;
+}
+.lane-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #fff8;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e11d48;
+  pointer-events: none;
+  z-index: 2;
+}

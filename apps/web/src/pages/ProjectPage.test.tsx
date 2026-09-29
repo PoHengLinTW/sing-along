@@ -5,7 +5,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAppRouter } from '../App';
 import { AppProviders } from '../providers';
 
+vi.mock('wavesurfer.js', () => ({
+  default: { create: () => ({ setOptions() {}, destroy() {} }) },
+}));
+vi.mock('../audio/useProjectAudio', () => ({ useProjectAudio: () => {} }));
+
 afterEach(() => vi.unstubAllGlobals());
+
+const fullTrack = (id: number) => ({
+  id,
+  projectId: 7,
+  name: `Track ${id}`,
+  performer: null,
+  labels: [],
+  startOffsetMs: 0,
+  latencyOffsetMs: 0,
+  durationMs: 1000,
+  mimeType: 'audio/flac',
+  sizeBytes: 1,
+  source: 'upload',
+  sortOrder: id,
+  peaks: [0.5],
+  createdAt: '',
+});
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -17,7 +39,7 @@ const project = (over = {}) => ({
   notes: 'Key of G',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
-  tracks: [{ id: 1 }, { id: 2 }, { id: 3 }],
+  tracks: [fullTrack(1), fullTrack(2), fullTrack(3)],
   ...over,
 });
 
@@ -101,7 +123,7 @@ describe('project header: delete', () => {
   });
 
   it('uses the singular for one track', async () => {
-    setup(() => json(200, project({ tracks: [{ id: 1 }] })));
+    setup(() => json(200, project({ tracks: [fullTrack(1)] })));
     await userEvent.click(await screen.findByRole('button', { name: 'Delete project' }));
     expect(
       screen.getByText("Delete 'Amazing Grace' and its 1 track? This cannot be undone."),

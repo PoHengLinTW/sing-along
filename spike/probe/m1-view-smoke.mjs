@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await (await browser.newContext({ viewport: { width: 1000, height: 700 } })).newPage();
+page.on('console', (m) => ['error', 'warning'].includes(m.type()) && console.log('console.' + m.type(), m.text()));
+page.on('pageerror', (e) => console.log('pageerror', e.message));
+const list = await (await fetch('http://localhost:5173/api/projects')).json();
+const withTrack = list.find((p) => p.trackCount > 0);
+const detail = await (await fetch('http://localhost:5173/api/projects/' + withTrack.id)).json();
+await page.goto('http://localhost:5173/project/' + withTrack.id);
+await page.waitForSelector('[data-testid=lane-' + detail.tracks[0].id + ']');
+await page.waitForFunction(() => !document.querySelector('.lane-status'), null, { timeout: 15000 });
+await page.screenshot({ path: '/private/tmp/claude-501/-Users-henrylin-ai-sing-along/83ed5b80-c7ac-4a95-8e65-1e7120665c7f/scratchpad/view1.png' });
+const canvases = await page.evaluate(() => [...document.querySelectorAll('.lane canvas')].map((c) => c.width + 'x' + c.height));
+console.log('canvases:', canvases);
+await browser.close();
