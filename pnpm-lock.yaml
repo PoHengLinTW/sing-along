@@ -66,6 +66,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.104.0
         version: 5.104.0(react@19.3.0)
+      libflacjs:
+        specifier: ^5.6.0
+        version: 5.6.0
       react:
         specifier: ^19.3.0
         version: 19.3.0
@@ -1456,6 +1459,10 @@ packages:
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
+
+  libflacjs@5.6.0:
+    resolution: {integrity: sha512-ev9pJxcPEkUdQDBd5ywPHEtYe9mGlzLaNwj+sS32IpiOTPnCYQsCPZLR95dAYXix24UICJJwld4D/tZrR0RFbw==}
+    hasBin: true
 
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
@@ -3044,6 +3051,8 @@ snapshots:
       dequal: 2.0.3
 
   json-schema-traverse@1.0.0: {}
+
+  libflacjs@5.6.0: {}
 
   light-my-request@6.6.0:
     dependencies:

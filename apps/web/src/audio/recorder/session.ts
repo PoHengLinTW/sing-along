@@ -1,12 +1,14 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { type AudioController, getAudioController } from '../controller';
-import { ChunkWriter, type Draft, DraftStore } from './draftStore';
+import { ChunkWriter, type Draft, type DraftStore } from './draftStore';
+import { getDraftEncoder } from './encoder';
 import { LEVEL_BLOCK_FRAMES } from './level';
 import { clearLevel, feedLevel, levelStore } from './levelStore';
 import { type LiveWave, liveWave } from './liveWave';
 import { getInputMonitor } from './monitor';
 import { browserRecorderDeps, type LevelMessage, Recorder } from './recorder';
 import { type RecordingState, recordingStore } from './recordingStore';
+import { getDraftStore } from './storeInstance';
 import { takePlacement } from './timing';
 
 /** PRD cap: one take is at most 10 minutes. */
@@ -39,6 +41,8 @@ export interface SessionDeps {
   /** The take is over: the meter should drop to empty. */
   onEnd?: () => void;
   maxSec?: number;
+  /** A stopped take is now an `encoding` draft: hand it to the encoder. */
+  onStopped?: (draft: Draft) => void;
   /** Called after the take was stopped because it reached the cap. */
   onAutoStop?: (draft: Draft) => void;
 }
@@ -142,7 +146,11 @@ export class RecordingSession {
     try {
       await recorder.stop();
       await this.writer?.close();
-      return await (this.store as DraftStore).updateDraft(draft.id, { status: 'encoding' });
+      const encoding = await (this.store as DraftStore).updateDraft(draft.id, {
+        status: 'encoding',
+      });
+      this.deps.onStopped?.(encoding);
+      return encoding;
     } finally {
       this.reset();
     }
@@ -193,12 +201,6 @@ export class RecordingSession {
   }
 }
 
-let storePromise: Promise<DraftStore> | null = null;
-export const getDraftStore = () => {
-  storePromise ??= DraftStore.open();
-  return storePromise;
-};
-
 let shared: RecordingSession | null = null;
 
 /** The app-wide session, wired to the shared audio controller and the browser's mic. */
@@ -215,6 +217,7 @@ export function getRecordingSession(): RecordingSession {
     onLevel: (l) => feedLevel(levelStore, l),
     beforeStart: () => getInputMonitor().stop(),
     onEnd: () => clearLevel(levelStore),
+    onStopped: (d) => void getDraftEncoder().encode(d.id),
     onAutoStop: () => {
       // The UI layer shows the toast (RecordButton subscribes via setAutoStopHandler).
       autoStopHandler?.();

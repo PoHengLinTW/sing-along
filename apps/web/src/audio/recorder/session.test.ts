@@ -42,6 +42,7 @@ let onAutoStop: Mock<(d: Draft) => void>;
 let playing: boolean;
 let live: LiveWave;
 let meter: LevelMessage[];
+let stopped: Draft[];
 
 const controller = () => ({
   engine: {
@@ -76,6 +77,7 @@ function makeSession(maxSec = 600) {
     beforeStart: () => calls.push('before'),
     maxSec,
     onAutoStop,
+    onStopped: (d) => stopped.push(d),
   });
 }
 
@@ -88,6 +90,7 @@ beforeEach(async () => {
   recording = createRecordingStore();
   calls = [];
   meter = [];
+  stopped = [];
   live = new LiveWave();
   playing = false;
   timelineAt = vi.fn(() => 4.9);
@@ -205,6 +208,19 @@ describe('RecordingSession chunks and stop', () => {
     s.setMuted(true);
     expect(recorder.setMuted).toHaveBeenCalledWith(true);
     expect(recording.getState().muted).toBe(true);
+  });
+});
+
+describe('RecordingSession hand-off', () => {
+  it('passes the stopped draft on for encoding, also when the cap ends the take', async () => {
+    const s = makeSession(1);
+    await s.start(input);
+    recorder.emit(48000); // hits the 1 s cap
+    await vi.waitFor(() => expect(stopped).toHaveLength(1));
+    expect(stopped[0]).toMatchObject({ status: 'encoding' });
+    await s.start(input);
+    const d = await s.stop();
+    expect(stopped.map((x) => x.id)).toContain(d.id);
   });
 });
 

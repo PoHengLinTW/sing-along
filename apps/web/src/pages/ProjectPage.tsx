@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
+import { EncodeStatus } from '../audio/recorder/EncodeStatus';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
 import { recordingStore } from '../audio/recorder/recordingStore';
@@ -66,6 +67,7 @@ export function ProjectPage() {
       <TransportBar projectId={query.data.id} />
       <MicSetup />
       <LevelMeter />
+      <EncodeStatus />
       <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
       <p className="mix-actions">
         <button
