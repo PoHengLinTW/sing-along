@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftStore } from '../audio/recorder/draftStore';
 import type { DraftView } from '../audio/recorder/draftView';
@@ -7,15 +8,17 @@ import { getDraftStore } from '../audio/recorder/storeInstance';
 import { LANE_HEIGHT, LANE_MARGIN } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
+import { LatencyControl } from './LatencyControl';
 import { MixControls } from './MixControls';
 
 interface Props {
   draft: DraftView;
   store?: DraftStore;
+  onLatency?: (ms: number) => void;
 }
 
 /** The left-hand controls of a take that has not been uploaded yet. It exists only in this browser. */
-export function DraftPanel({ draft, store }: Props) {
+export function DraftPanel({ draft, store, onLatency = () => {} }: Props) {
   const [confirming, setConfirming] = useState(false);
   const open = async () => store ?? (await getDraftStore());
 
@@ -58,6 +61,11 @@ export function DraftPanel({ draft, store }: Props) {
           🗑
         </button>
       </MixControls>
+      <LatencyControl
+        value={draft.latencyOffsetMs}
+        onChange={onLatency}
+        onPreview={() => void getAudioController().previewAround()}
+      />
       <ConfirmDialog
         open={confirming}
         title="Discard take?"

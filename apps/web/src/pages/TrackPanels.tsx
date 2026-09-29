@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { apiFetch } from '../api/client';
+import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftView } from '../audio/recorder/draftView';
 import { recordingStore } from '../audio/recorder/recordingStore';
@@ -13,6 +14,7 @@ import { EditableText } from '../ui/EditableText';
 import { LabelChip } from '../ui/LabelChip';
 import { DraftPanel } from './DraftPanel';
 import { LabelEditor } from './LabelEditor';
+import { LatencyControl } from './LatencyControl';
 import { MixControls } from './MixControls';
 
 export function TrackPanels({
@@ -20,6 +22,8 @@ export function TrackPanels({
   visible,
   reorderDisabled,
   drafts = [],
+  onTrackLatency,
+  onDraftLatency,
 }: {
   project: ProjectDetail;
   /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
@@ -27,6 +31,8 @@ export function TrackPanels({
   reorderDisabled: boolean;
   /** Takes not uploaded yet: listed below the uploaded tracks. */
   drafts?: DraftView[];
+  onTrackLatency?: (track: TrackDto, ms: number) => void;
+  onDraftLatency?: (draft: DraftView, ms: number) => void;
 }) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
@@ -84,6 +90,7 @@ export function TrackPanels({
           projectKey={key}
           reorderDisabled={reorderDisabled}
           onSaved={(updated) => patchTrack(track.id, updated)}
+          onLatency={(ms) => onTrackLatency?.(track, ms)}
           onDragStart={() => {
             dragId.current = track.id;
           }}
@@ -95,7 +102,7 @@ export function TrackPanels({
         />
       ))}
       {drafts.map((d) => (
-        <DraftPanel key={d.id} draft={d} />
+        <DraftPanel key={d.id} draft={d} onLatency={(ms) => onDraftLatency?.(d, ms)} />
       ))}
       {isRecording && (
         <div
@@ -115,6 +122,7 @@ interface PanelProps {
   reorderDisabled: boolean;
   projectKey: (string | number)[];
   onSaved: (updated: TrackDto) => void;
+  onLatency: (ms: number) => void;
   onDragStart: () => void;
   onDrop: () => void;
   onMove: (offset: -1 | 1) => void;
@@ -125,6 +133,7 @@ function TrackPanel({
   projectKey,
   reorderDisabled,
   onSaved,
+  onLatency,
   onDragStart,
   onDrop,
   onMove,
@@ -229,6 +238,11 @@ function TrackPanel({
           🗑
         </button>
       </MixControls>
+      <LatencyControl
+        value={track.latencyOffsetMs}
+        onChange={onLatency}
+        onPreview={() => void getAudioController().previewAround()}
+      />
       <LabelEditor
         open={editingLabels}
         track={track}

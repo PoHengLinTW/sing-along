@@ -34,7 +34,7 @@ type Gesture =
 /** Pointer movement under this many px is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 
-export const LANE_HEIGHT = 136;
+export const LANE_HEIGHT = 168;
 export const LANE_MARGIN = 2;
 /** Height of the ruler including its border: the track panel column starts below it. */
 export const RULER_HEIGHT = 25;

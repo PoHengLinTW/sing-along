@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { type AddTrackInput, AudioEngine } from './engine';
-import { adjustEdge, type LoopRegion, makeLoop } from './loop';
+import { adjustEdge, type LoopRegion, makeLoop, previewWindow } from './loop';
 import { type MixerState, mixerStore } from './mixerStore';
 import { type TransportState, transportStore } from './transportStore';
 
@@ -128,6 +128,17 @@ export class AudioController {
     }
     if (loopA === null || position <= loopA) return false;
     return this.setLoopRegion({ a: loopA, b: position });
+  }
+
+  /** Loops the 4 s around the playhead and plays it: for judging a latency offset by ear. */
+  async previewAround(): Promise<void> {
+    if (this.isRecording) return;
+    const { duration } = this.store.getState();
+    const window = previewWindow(this.engine.position, duration);
+    this.store.setState({ loop: window, loopEnabled: true, loopA: null });
+    this.applyLoop();
+    this.seek(window.a);
+    if (!this.engine.playing) await this.play();
   }
 
   toggleLoop(): void {
