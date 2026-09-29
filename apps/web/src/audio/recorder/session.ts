@@ -1,7 +1,11 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { type AudioController, getAudioController } from '../controller';
 import { ChunkWriter, type Draft, DraftStore } from './draftStore';
-import { browserRecorderDeps, Recorder } from './recorder';
+import { LEVEL_BLOCK_FRAMES } from './level';
+import { clearLevel, feedLevel, levelStore } from './levelStore';
+import { type LiveWave, liveWave } from './liveWave';
+import { getInputMonitor } from './monitor';
+import { browserRecorderDeps, type LevelMessage, Recorder } from './recorder';
 import { type RecordingState, recordingStore } from './recordingStore';
 import { takePlacement } from './timing';
 
@@ -21,8 +25,19 @@ type RecorderPort = Pick<Recorder, 'start' | 'stop' | 'setMuted' | 'sampleCount'
 export interface SessionDeps {
   controller: ControllerPort;
   getStore: () => Promise<DraftStore>;
-  createRecorder: (onChunk: (samples: Float32Array) => void) => RecorderPort;
+  createRecorder: (
+    onChunk: (samples: Float32Array) => void,
+    onLevel: (level: LevelMessage) => void,
+  ) => RecorderPort;
   recording: StoreApi<RecordingState>;
+  /** The take's min/max blocks for the live lane. */
+  live?: LiveWave;
+  /** Every level block, for the meter. */
+  onLevel?: (level: LevelMessage) => void;
+  /** Runs before the mic is opened: closes the input check so only one stream is open. */
+  beforeStart?: () => void;
+  /** The take is over: the meter should drop to empty. */
+  onEnd?: () => void;
   maxSec?: number;
   /** Called after the take was stopped because it reached the cap. */
   onAutoStop?: (draft: Draft) => void;
@@ -61,9 +76,14 @@ export class RecordingSession {
     recording.setState({ status: 'starting', muted: false, draftId: null, startSec: 0 });
     this.early = [];
     let began = false;
+    this.deps.beforeStart?.();
+    this.deps.live?.reset();
     try {
       await controller.engine.ensureContext().resume();
-      const recorder = this.deps.createRecorder((samples) => this.onChunk(samples));
+      const recorder = this.deps.createRecorder(
+        (samples) => this.onChunk(samples),
+        (level) => this.onLevel(level),
+      );
       this.recorder = recorder;
       // Mic first, then playback: frames captured before playback starts are kept, and the
       // placement maths below puts every frame at its true timeline position.
@@ -80,6 +100,7 @@ export class RecordingSession {
         sampleRate,
         ...takePlacement(startSec, sampleRate),
       });
+      this.deps.live?.setTiming(startSec, sampleRate, LEVEL_BLOCK_FRAMES);
       this.store = store;
       this.draft = draft;
       this.writer = new ChunkWriter(store, draft.id);
@@ -127,6 +148,11 @@ export class RecordingSession {
     }
   }
 
+  private onLevel(level: LevelMessage): void {
+    this.deps.onLevel?.(level);
+    if (level.capturing) this.deps.live?.push(level.min, level.max);
+  }
+
   private onChunk(samples: Float32Array): void {
     if (this.writer) this.writer.push(samples);
     else this.early.push(samples);
@@ -161,6 +187,8 @@ export class RecordingSession {
     this.draft = null;
     this.store = null;
     this.early = [];
+    this.deps.live?.reset();
+    this.deps.onEnd?.();
     this.deps.recording.setState({ status: 'idle', muted: false, draftId: null, startSec: 0 });
   }
 }
@@ -178,11 +206,15 @@ export function getRecordingSession(): RecordingSession {
   shared ??= new RecordingSession({
     controller: getAudioController(),
     getStore: getDraftStore,
-    createRecorder: (onChunk) => {
+    createRecorder: (onChunk, onLevel) => {
       const ctx = getAudioController().engine.ensureContext();
-      return new Recorder(browserRecorderDeps(ctx), onChunk);
+      return new Recorder(browserRecorderDeps(ctx), onChunk, onLevel);
     },
     recording: recordingStore,
+    live: liveWave,
+    onLevel: (l) => feedLevel(levelStore, l),
+    beforeStart: () => getInputMonitor().stop(),
+    onEnd: () => clearLevel(levelStore),
     onAutoStop: () => {
       // The UI layer shows the toast (RecordButton subscribes via setAutoStopHandler).
       autoStopHandler?.();

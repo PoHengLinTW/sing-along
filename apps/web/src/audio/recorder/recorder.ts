@@ -43,26 +43,37 @@ export interface RecorderResult {
   sampleRate: number;
 }
 
+export interface LevelMessage {
+  min: number;
+  max: number;
+  frames: number;
+  /** True for blocks inside the take (as opposed to input-check monitoring). */
+  capturing: boolean;
+}
+
 /**
  * Mono AudioWorklet capture on the playback AudioContext, so take timing shares the playback clock.
+ * `open` connects the mic and reports levels (input check); `startCapture` then begins the take.
  * Chunks are handed to `onChunk` (which persists them) and are not kept in memory here.
  */
 export class Recorder {
-  /** Sample rate of the AudioContext, known once `start` resolves; stored with the take. */
+  /** Sample rate of the AudioContext, known once capture has started; stored with the take. */
   sampleRate = 0;
   sampleCount = 0;
   muted = false;
   private link: { port: MessagePort; disconnect(): void } | null = null;
   private stream: MediaStream | null = null;
   private chunkIndex = 0;
+  private firstFrame: Promise<{ ctxTime: number; sampleRate: number }> | null = null;
 
   constructor(
     private deps: RecorderDeps,
     private onChunk: (samples: Float32Array, index: number) => void = () => {},
+    private onLevel: (level: LevelMessage) => void = () => {},
   ) {}
 
-  /** Resolves when the first audio arrives, with the AudioContext time of its first frame. */
-  async start(deviceId: string | null): Promise<{ ctxTime: number; sampleRate: number }> {
+  /** Connects the mic. Levels flow from now on; nothing is captured until `startCapture`. */
+  async open(deviceId: string | null): Promise<void> {
     await this.deps.addModule();
     const { stream } = await this.deps.openStream(deviceId);
     this.stream = stream;
@@ -72,19 +83,34 @@ export class Recorder {
       this.release();
       throw err;
     }
-    const { port } = this.link;
-    return new Promise((resolve) => {
-      port.onmessage = (e: MessageEvent) => {
-        const m = e.data;
-        if (m.type === 'start') {
-          this.sampleRate = m.sampleRate;
-          resolve({ ctxTime: m.ctxTime, sampleRate: m.sampleRate });
-        } else if (m.type === 'chunk') {
-          this.sampleCount += m.samples.length;
-          this.onChunk(m.samples, this.chunkIndex++);
-        }
-      };
+    let onFirst: (v: { ctxTime: number; sampleRate: number }) => void = () => {};
+    this.firstFrame = new Promise((resolve) => {
+      onFirst = resolve;
     });
+    this.link.port.onmessage = (e: MessageEvent) => {
+      const m = e.data;
+      if (m.type === 'start') {
+        this.sampleRate = m.sampleRate;
+        onFirst({ ctxTime: m.ctxTime, sampleRate: m.sampleRate });
+      } else if (m.type === 'chunk') {
+        this.sampleCount += m.samples.length;
+        this.onChunk(m.samples, this.chunkIndex++);
+      } else if (m.type === 'level') {
+        this.onLevel({ min: m.min, max: m.max, frames: m.frames, capturing: m.capturing });
+      }
+    };
+  }
+
+  /** Begins the take. Resolves when the first audio arrives, with the context time of its first frame. */
+  startCapture(): Promise<{ ctxTime: number; sampleRate: number }> {
+    if (!this.link || !this.firstFrame) return Promise.reject(new Error('Microphone not open'));
+    this.link.port.postMessage({ type: 'capture', on: true });
+    return this.firstFrame;
+  }
+
+  async start(deviceId: string | null): Promise<{ ctxTime: number; sampleRate: number }> {
+    await this.open(deviceId);
+    return this.startCapture();
   }
 
   setMuted(muted: boolean): void {
@@ -105,6 +131,11 @@ export class Recorder {
     }
     this.release();
     return { sampleCount: this.sampleCount, sampleRate: this.sampleRate };
+  }
+
+  /** Releases the mic without a take (input check off). */
+  close(): void {
+    this.release();
   }
 
   private release(): void {

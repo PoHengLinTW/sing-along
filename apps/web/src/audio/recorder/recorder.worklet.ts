@@ -1,6 +1,8 @@
-// Runs in the AudioWorkletGlobalScope. Reports the context time of the first frame (for offset
-// math) and streams ~1 s chunks; mute zeroes samples but keeps the take's length.
+// Runs in the AudioWorkletGlobalScope. Always reports input levels (min/max blocks); while
+// capturing it also reports the context time of the first frame (for offset math) and streams
+// ~1 s chunks. Mute zeroes the take's samples but keeps its length.
 import { ChunkBatcher } from './chunker';
+import { LevelTracker } from './level';
 
 declare const sampleRate: number;
 declare const currentTime: number;
@@ -11,6 +13,8 @@ declare function registerProcessor(name: string, ctor: new () => AudioWorkletPro
 
 class RecorderProcessor extends AudioWorkletProcessor {
   private batcher = new ChunkBatcher(sampleRate);
+  private levels = new LevelTracker();
+  private capturing = false;
   private first = true;
 
   constructor() {
@@ -18,15 +22,21 @@ class RecorderProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e: MessageEvent) => {
       const m = e.data;
       if (m === 'stop') {
+        this.capturing = false;
         this.emit([this.batcher.flush()]);
         this.port.postMessage({ type: 'done' });
-      } else if (m?.type === 'mute') this.batcher.setMuted(m.muted === true);
+      } else if (m?.type === 'capture') this.capturing = m.on === true;
+      else if (m?.type === 'mute') this.batcher.setMuted(m.muted === true);
     };
   }
 
   process(inputs: Float32Array[][]): boolean {
     const ch = inputs[0]?.[0];
     if (!ch) return true;
+    for (const b of this.levels.push(ch)) {
+      this.port.postMessage({ type: 'level', ...b, capturing: this.capturing });
+    }
+    if (!this.capturing) return true;
     if (this.first) {
       this.first = false;
       this.port.postMessage({ type: 'start', ctxTime: currentTime, sampleRate });

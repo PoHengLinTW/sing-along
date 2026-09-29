@@ -88,3 +88,46 @@ describe('Recorder', () => {
     expect(stopTrack).toHaveBeenCalled();
   });
 });
+
+describe('Recorder monitor mode (input check)', () => {
+  it('open connects the mic without capturing, and forwards levels', async () => {
+    const { port, deps } = setup();
+    const onLevel = vi.fn();
+    const rec = new Recorder(deps, undefined, onLevel);
+    await rec.open(null);
+    expect(port.sent).not.toContainEqual({ type: 'capture', on: true });
+    port.emit({ type: 'level', min: -0.5, max: 0.25, frames: 1024, capturing: false });
+    expect(onLevel).toHaveBeenCalledWith({ min: -0.5, max: 0.25, frames: 1024, capturing: false });
+  });
+
+  it('close releases the mic without asking the worklet to stop', async () => {
+    const { port, deps, stopTrack, disconnect } = setup();
+    const rec = new Recorder(deps);
+    await rec.open(null);
+    rec.close();
+    expect(stopTrack).toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalled();
+    expect(port.sent).not.toContain('stop');
+  });
+
+  it('startCapture turns capture on and resolves with the first captured frame', async () => {
+    const { port, deps } = setup();
+    const rec = new Recorder(deps);
+    await rec.open(null);
+    const p = rec.startCapture();
+    expect(port.sent).toContainEqual({ type: 'capture', on: true });
+    port.emit({ type: 'start', ctxTime: 3.5, sampleRate: 44100 });
+    expect(await p).toEqual({ ctxTime: 3.5, sampleRate: 44100 });
+    expect(rec.sampleRate).toBe(44100);
+  });
+
+  it('marks levels that arrive while capturing', async () => {
+    const { port, deps } = setup();
+    const onLevel = vi.fn();
+    const rec = new Recorder(deps, undefined, onLevel);
+    void rec.start(null);
+    await vi.waitFor(() => expect(port.onmessage).not.toBeNull());
+    port.emit({ type: 'level', min: 0, max: 1, frames: 1024, capturing: true });
+    expect(onLevel.mock.calls[0]?.[0].capturing).toBe(true);
+  });
+});

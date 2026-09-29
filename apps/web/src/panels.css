@@ -193,3 +193,51 @@ button[aria-pressed="true"] {
 .track-panel .editable input {
   padding: 1px 3px;
 }
+
+.record {
+  font-weight: 600;
+}
+.record.recording {
+  background: #e11d48;
+  border-color: #e11d48;
+  color: #fff;
+}
+.recording-lane {
+  position: relative; /* no overflow: the canvas is sticky to the scroller's left edge */
+  margin: 2px 0;
+  background: #e11d4814;
+}
+.recording-canvas {
+  position: sticky;
+  left: 0;
+  display: block;
+}
+.recording-panel {
+  display: grid;
+  place-items: center;
+  color: #e11d48;
+  border: 1px dashed #e11d48;
+  border-radius: 6px;
+}
+.level-meter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.level-meter .meter {
+  width: 220px;
+  height: 14px;
+}
+.clip-warning {
+  color: #e11d48;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.mic-setup {
+  margin-top: 0.5rem;
+}
+.headphone-hint {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}

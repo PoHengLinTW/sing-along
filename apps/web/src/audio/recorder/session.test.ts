@@ -2,6 +2,8 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { type Draft, DraftStore } from './draftStore';
+import { LiveWave } from './liveWave';
+import type { LevelMessage } from './recorder';
 import { createRecordingStore } from './recordingStore';
 import { RecordingSession } from './session';
 
@@ -18,7 +20,13 @@ class FakeRecorder {
     this.stopped = true;
     return { sampleCount: this.sampleCount, sampleRate: this.sampleRate };
   });
-  constructor(public onChunk: (s: Float32Array, i: number) => void) {}
+  constructor(
+    public onChunk: (s: Float32Array, i: number) => void,
+    public onLevel: (l: LevelMessage) => void = () => {},
+  ) {}
+  level(min: number, max: number, capturing: boolean) {
+    this.onLevel({ min, max, frames: 1024, capturing });
+  }
   emit(n: number, v = 0.5) {
     this.sampleCount += n;
     this.onChunk(new Float32Array(n).fill(v), 0);
@@ -32,6 +40,8 @@ let calls: string[];
 let timelineAt: (t: number) => number | null;
 let onAutoStop: Mock<(d: Draft) => void>;
 let playing: boolean;
+let live: LiveWave;
+let meter: LevelMessage[];
 
 const controller = () => ({
   engine: {
@@ -56,11 +66,14 @@ function makeSession(maxSec = 600) {
   return new RecordingSession({
     controller: controller() as never,
     getStore: async () => store,
-    createRecorder: (onChunk) => {
-      recorder = new FakeRecorder(onChunk);
+    createRecorder: (onChunk, onLevel) => {
+      recorder = new FakeRecorder(onChunk, onLevel);
       return recorder as never;
     },
     recording,
+    live,
+    onLevel: (l) => meter.push(l),
+    beforeStart: () => calls.push('before'),
     maxSec,
     onAutoStop,
   });
@@ -74,6 +87,8 @@ beforeEach(async () => {
   store = await DraftStore.open();
   recording = createRecordingStore();
   calls = [];
+  meter = [];
+  live = new LiveWave();
   playing = false;
   timelineAt = vi.fn(() => 4.9);
   onAutoStop = vi.fn<(d: Draft) => void>();
@@ -84,7 +99,7 @@ describe('RecordingSession.start', () => {
     const s = makeSession();
     await s.start(input);
     expect(recorder.start).toHaveBeenCalledWith(null);
-    expect(calls).toEqual(['begin', 'play']);
+    expect(calls).toEqual(['before', 'begin', 'play']);
     expect(timelineAt).toHaveBeenCalledWith(9.9);
     const [d] = await store.listDrafts(1);
     expect(d).toMatchObject({
@@ -105,7 +120,7 @@ describe('RecordingSession.start', () => {
   it('keeps playing when already playing instead of restarting', async () => {
     playing = true;
     await makeSession().start(input);
-    expect(calls).toEqual(['begin']);
+    expect(calls).toEqual(['before', 'begin']);
   });
 
   it('trims the part that falls before timeline 0', async () => {
@@ -122,10 +137,11 @@ describe('RecordingSession.start', () => {
       getStore: async () => store,
       createRecorder: () => ({ start: async () => Promise.reject(fail) }) as never,
       recording,
+      beforeStart: () => calls.push('before'),
       onAutoStop,
     });
     await expect(sess.start(input)).rejects.toBe(fail);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(['before']);
     expect(recording.getState().status).toBe('idle');
     expect(await store.listDrafts(1)).toEqual([]);
   });
@@ -189,6 +205,39 @@ describe('RecordingSession chunks and stop', () => {
     s.setMuted(true);
     expect(recorder.setMuted).toHaveBeenCalledWith(true);
     expect(recording.getState().muted).toBe(true);
+  });
+});
+
+describe('RecordingSession levels', () => {
+  it('feeds every level to the meter, but only captured blocks to the live waveform', async () => {
+    const s = makeSession();
+    await s.start(input);
+    recorder.level(-0.1, 0.1, false);
+    recorder.level(-0.5, 0.6, true);
+    expect(meter).toHaveLength(2);
+    expect(live.count).toBe(1);
+    expect(live.max[0]).toBe(0.6);
+  });
+
+  it('places the live waveform at the take start, aligned with the timeline', async () => {
+    timelineAt = vi.fn(() => 4.9);
+    const s = makeSession();
+    const started = s.start(input);
+    await Promise.resolve();
+    recorder.level(-1, 1, true); // arrives before the placement is known
+    await started;
+    expect(live.timed).toBe(true);
+    expect(live.startSec).toBeCloseTo(4.9);
+    expect(live.blockSec).toBeCloseTo(1024 / 48000);
+    expect(live.count).toBe(1);
+  });
+
+  it('clears the live waveform when a new take starts', async () => {
+    const s = makeSession();
+    await s.start(input);
+    recorder.level(-1, 1, true);
+    await s.stop();
+    expect(live.count).toBe(0);
   });
 });
 

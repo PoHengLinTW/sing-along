@@ -1,8 +1,10 @@
 import type { ProjectDetail, TrackDto } from '@sing-along/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { useStore } from 'zustand';
 import { apiFetch } from '../api/client';
 import { mixerStore, useMix } from '../audio/mixerStore';
+import { recordingStore } from '../audio/recorder/recordingStore';
 import { moveBefore, moveByOffset } from '../lib/reorder';
 import { LANE_HEIGHT, LANE_MARGIN, RULER_HEIGHT } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -23,6 +25,7 @@ export function TrackPanels({
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
   const dragId = useRef<number | null>(null);
+  const isRecording = useStore(recordingStore, (s) => s.status === 'recording');
 
   const patchTrack = (id: number, updated: TrackDto) =>
     qc.setQueryData<ProjectDetail>(key, (old) =>
@@ -85,6 +88,15 @@ export function TrackPanels({
           onMove={(offset) => applyOrder(moveByOffset(ids, track.id, offset))}
         />
       ))}
+      {isRecording && (
+        <div
+          className="track-panel recording-panel"
+          data-testid="panel-recording"
+          style={{ height: LANE_HEIGHT, margin: `${LANE_MARGIN}px 0` }}
+        >
+          <strong>● Recording…</strong>
+        </div>
+      )}
     </div>
   );
 }

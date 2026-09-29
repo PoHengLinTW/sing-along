@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
+import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
 import { recordingStore } from '../audio/recorder/recordingStore';
 import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
@@ -64,6 +65,7 @@ export function ProjectPage() {
       <ProjectHeader project={query.data} />
       <TransportBar projectId={query.data.id} />
       <MicSetup />
+      <LevelMeter />
       <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
       <p className="mix-actions">
         <button
