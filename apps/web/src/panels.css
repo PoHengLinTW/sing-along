@@ -35,6 +35,57 @@
   font-variant-numeric: tabular-nums;
   margin-left: 0.5rem;
 }
+.loop-controls {
+  border: none;
+  margin-top: 0;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid #8884;
+}
+.loop-range {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.loop-region {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #2563eb33;
+  border-left: 2px solid #2563eb;
+  border-right: 2px solid #2563eb;
+  z-index: 1;
+  pointer-events: none;
+}
+.loop-region[data-enabled="false"] {
+  background: #8882;
+  border-color: #8886;
+}
+.loop-handle {
+  position: absolute;
+  top: 0;
+  left: -6px;
+  width: 12px;
+  height: 25px; /* the ruler strip: handles live on the ruler */
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+.loop-handle.b {
+  left: auto;
+  right: -6px;
+}
+.loop-a-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed #2563eb;
+  z-index: 1;
+  pointer-events: none;
+}
 .panels {
   padding-top: 1px; /* the timeline scroller has a 1px border */
 }

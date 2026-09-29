@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
 import { type AudioController, getAudioController } from '../audio/controller';
+import { adjustEdge, type LoopRegion } from '../audio/loop';
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
@@ -11,11 +12,19 @@ import { Waveform } from './Waveform';
 
 interface Props {
   tracks: TrackDto[];
-  controller?: Pick<AudioController, 'seek'>;
+  controller?: Pick<AudioController, 'seek' | 'setLoopRegion' | 'adjustLoopEdge'>;
   transport?: StoreApi<TransportState>;
   view?: StoreApi<ViewState>;
   status?: StoreApi<StatusState>;
 }
+
+type Gesture =
+  | { kind: 'scrub' }
+  | { kind: 'ruler'; startX: number; moved: boolean }
+  | { kind: 'edge'; edge: 'a' | 'b' };
+
+/** Pointer movement under this many px is a click, not a drag. */
+const CLICK_SLOP_PX = 4;
 
 export const LANE_HEIGHT = 112;
 export const LANE_MARGIN = 2;
@@ -37,7 +46,12 @@ export function Timeline({
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  const gesture = useRef<Gesture | null>(null);
+  const [preview, setPreview] = useState<LoopRegion | null>(null);
+  const loop = useStore(transport, (s) => s.loop);
+  const loopEnabled = useStore(transport, (s) => s.loopEnabled);
+  const loopA = useStore(transport, (s) => s.loopA);
+  const region = preview ?? loop;
   const anchor = useRef<{ sec: number; x: number } | null>(null);
   const programmatic = useRef<number | null>(null); // scrollLeft we set ourselves
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
@@ -112,9 +126,64 @@ export function Timeline({
     setViewport({ left: el.scrollLeft, width: el.clientWidth });
   };
 
-  const seekAt = (clientX: number) => {
+  const secAt = (clientX: number) => {
     const rect = content.current?.getBoundingClientRect();
-    ctl.seek(pxToSec(clientX - (rect?.left ?? 0), view.getState().pxPerSec));
+    return pxToSec(clientX - (rect?.left ?? 0), view.getState().pxPerSec);
+  };
+  const seekAt = (clientX: number) => ctl.seek(secAt(clientX));
+
+  // A gesture is one of: scrubbing a lane, dragging on the ruler (click = seek, drag = new loop),
+  // or dragging a loop edge handle. The kind is decided on pointer down.
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.buttons !== 1) return;
+    const target = e.target as Element;
+    (target as Element).setPointerCapture?.(e.pointerId);
+    const handle = target.closest('[data-loop-handle]')?.getAttribute('data-loop-handle');
+    if (handle === 'a' || handle === 'b') {
+      gesture.current = { kind: 'edge', edge: handle };
+      return;
+    }
+    view.setState({ follow: true }); // a seek re-enables following
+    if (target.closest('[data-testid="ruler"]')) {
+      gesture.current = { kind: 'ruler', startX: e.clientX, moved: false };
+      return;
+    }
+    gesture.current = { kind: 'scrub' };
+    seekAt(e.clientX);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    if (!g || e.buttons !== 1) return;
+    if (g.kind === 'scrub') seekAt(e.clientX);
+    else if (g.kind === 'ruler') {
+      if (Math.abs(e.clientX - g.startX) > CLICK_SLOP_PX) g.moved = true;
+      if (g.moved) {
+        const a = secAt(g.startX);
+        const b = secAt(e.clientX);
+        setPreview({ a: Math.min(a, b), b: Math.max(a, b) });
+      }
+    } else if (loop) {
+      setPreview(adjustEdge(loop, g.edge, secAt(e.clientX), Math.max(contentSec, loop.b)));
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    gesture.current = null;
+    setPreview(null);
+    if (!g) return;
+    if (g.kind === 'ruler') {
+      if (!g.moved)
+        seekAt(e.clientX); // a plain click on the ruler seeks
+      else {
+        const a = secAt(g.startX);
+        const b = secAt(e.clientX);
+        ctl.setLoopRegion({ a: Math.min(a, b), b: Math.max(a, b) });
+      }
+    } else if (g.kind === 'edge') {
+      ctl.adjustLoopEdge(g.edge, secAt(e.clientX));
+    }
   };
 
   const from = viewport.width ? Math.max(0, (viewport.left - viewport.width) / pxPerSec) : 0;
@@ -147,25 +216,14 @@ export function Timeline({
         ref={scroller}
         onScroll={onScroll}
       >
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer scrubbing surface; keyboard seeking is on the transport */}
         <div
           className="timeline-content"
           data-testid="timeline-content"
           ref={content}
           style={{ width: `${contentPx}px` }}
-          onPointerDown={(e) => {
-            if (e.buttons !== 1) return;
-            dragging.current = true;
-            view.setState({ follow: true }); // a seek re-enables following
-            (e.target as Element).setPointerCapture?.(e.pointerId);
-            seekAt(e.clientX);
-          }}
-          onPointerMove={(e) => {
-            if (dragging.current && e.buttons === 1) seekAt(e.clientX);
-          }}
-          onPointerUp={() => {
-            dragging.current = false;
-          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
         >
           <div className="ruler" data-testid="ruler">
             {ticks.map((t) => (
@@ -177,6 +235,27 @@ export function Timeline({
           {tracks.map((track) => (
             <Lane key={track.id} track={track} pxPerSec={pxPerSec} status={status} />
           ))}
+          {region && (
+            <div
+              className="loop-region"
+              data-testid="loop-region"
+              data-enabled={String(loopEnabled || preview !== null)}
+              style={{
+                left: `${secToPx(region.a, pxPerSec)}px`,
+                width: `${secToPx(region.b - region.a, pxPerSec)}px`,
+              }}
+            >
+              <span className="loop-handle" data-testid="loop-handle-a" data-loop-handle="a" />
+              <span className="loop-handle b" data-testid="loop-handle-b" data-loop-handle="b" />
+            </div>
+          )}
+          {loopA !== null && !loop && (
+            <div
+              className="loop-a-marker"
+              data-testid="loop-a-marker"
+              style={{ left: `${secToPx(loopA, pxPerSec)}px` }}
+            />
+          )}
           <div className="playhead" data-testid="playhead" ref={playhead} />
         </div>
       </div>

@@ -19,7 +19,7 @@ export class FakeGain {
 }
 export class FakeSource {
   buffer: FakeBuffer | null = null;
-  starts: { when: number; offset: number }[] = [];
+  starts: { when: number; offset: number; duration?: number }[] = [];
   stopped = false;
   connected: unknown = null;
   connect(node: unknown) {
@@ -28,8 +28,9 @@ export class FakeSource {
   disconnect() {
     this.connected = null;
   }
-  start(when: number, offset: number) {
-    this.starts.push({ when, offset });
+  start(when: number, offset: number, duration?: number) {
+    // duration is only recorded when given, like the real optional argument
+    this.starts.push(duration === undefined ? { when, offset } : { when, offset, duration });
   }
   stop() {
     this.stopped = true;

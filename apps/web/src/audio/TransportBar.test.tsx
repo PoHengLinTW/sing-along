@@ -10,6 +10,9 @@ const controller = {
   toggle: vi.fn(async () => {}),
   restart: vi.fn(),
   skip: vi.fn(),
+  setLoopPoint: vi.fn(() => true),
+  toggleLoop: vi.fn(),
+  clearLoop: vi.fn(),
 };
 
 beforeEach(() => {
@@ -102,5 +105,42 @@ describe('keyboard shortcuts', () => {
     view.unmount();
     press(' ');
     expect(controller.toggle).not.toHaveBeenCalled();
+  });
+});
+
+describe('loop controls', () => {
+  it('Set A and Set B mark the loop points at the playhead', async () => {
+    await userEvent.click(screen.getByRole('button', { name: 'Set loop start (A)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Set loop end (B)' }));
+    expect(controller.setLoopPoint).toHaveBeenNthCalledWith(1, 'a');
+    expect(controller.setLoopPoint).toHaveBeenNthCalledWith(2, 'b');
+  });
+
+  it('the loop toggle and Clear are disabled until there is a loop', () => {
+    expect((screen.getByRole('button', { name: 'Loop' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Clear loop' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it('shows the region, toggles looping and clears it', async () => {
+    act(() => transport.setState({ loop: { a: 10, b: 75.5 }, loopEnabled: true }));
+    expect(screen.getByTestId('loop-range').textContent).toBe('A 0:10 – B 1:15');
+    const toggle = screen.getByRole('button', { name: 'Loop' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    await userEvent.click(toggle);
+    expect(controller.toggleLoop).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Clear loop' }));
+    expect(controller.clearLoop).toHaveBeenCalledTimes(1);
+    act(() => transport.setState({ loopEnabled: false }));
+    expect(screen.getByRole('button', { name: 'Loop' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('shows a pending A while waiting for B, and can clear it', async () => {
+    act(() => transport.setState({ loopA: 12 }));
+    expect(screen.getByTestId('loop-range').textContent).toBe('A 0:12 – B ?');
+    expect((screen.getByRole('button', { name: 'Clear loop' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
   });
 });

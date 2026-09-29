@@ -46,7 +46,14 @@ const track = (id: number, over: Partial<TrackDto> = {}): TrackDto => ({
 let transport: ReturnType<typeof createTransportStore>;
 let view: ReturnType<typeof createViewStore>;
 let status: ReturnType<typeof createStatusStore>;
-const controller = { seek: vi.fn(), toggle: vi.fn(), play: vi.fn(), pause: vi.fn() };
+const controller = {
+  seek: vi.fn(),
+  toggle: vi.fn(),
+  play: vi.fn(),
+  pause: vi.fn(),
+  setLoopRegion: vi.fn(() => true),
+  adjustLoopEdge: vi.fn(),
+};
 
 function setup(tracks: TrackDto[]) {
   return render(
@@ -69,6 +76,8 @@ beforeEach(() => {
   ws.instances.length = 0;
   ws.create.mockClear();
   controller.seek.mockClear();
+  controller.setLoopRegion.mockClear();
+  controller.adjustLoopEdge.mockClear();
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     left: 0,
     top: 0,
@@ -164,7 +173,8 @@ describe('seeking', () => {
     view.setState({ pxPerSec: 50 });
     setup([track(1)]);
     fireEvent.pointerDown(screen.getByTestId('ruler'), { clientX: 250, buttons: 1 });
-    expect(controller.seek).toHaveBeenLastCalledWith(5);
+    fireEvent.pointerUp(screen.getByTestId('ruler'), { clientX: 250 });
+    expect(controller.seek).toHaveBeenLastCalledWith(5); // a click on the ruler seeks
     fireEvent.pointerDown(screen.getByTestId('lane-1'), { clientX: 100, buttons: 1 });
     expect(controller.seek).toHaveBeenLastCalledWith(2);
   });
@@ -172,7 +182,7 @@ describe('seeking', () => {
   it('dragging keeps seeking', () => {
     view.setState({ pxPerSec: 50 });
     setup([track(1)]);
-    const ruler = screen.getByTestId('ruler');
+    const ruler = screen.getByTestId('lane-1'); // dragging on a lane scrubs (the ruler makes loops)
     fireEvent.pointerDown(ruler, { clientX: 50, buttons: 1 });
     fireEvent.pointerMove(ruler, { clientX: 150, buttons: 1 });
     expect(controller.seek).toHaveBeenLastCalledWith(3);
@@ -233,7 +243,7 @@ describe('auto-follow', () => {
     fireEvent.wheel(scroller(), { deltaX: 120 }); // user scrolls sideways
     act(() => transport.setState({ position: 9.5 }));
     expect(scroller().scrollLeft).toBe(0);
-    fireEvent.pointerDown(screen.getByTestId('ruler'), { clientX: 300, buttons: 1 }); // a seek re-enables follow
+    fireEvent.pointerDown(screen.getByTestId('lane-1'), { clientX: 300, buttons: 1 }); // a seek re-enables follow
     act(() => transport.setState({ position: 12 }));
     expect(scroller().scrollLeft).toBeGreaterThan(0);
   });
@@ -252,4 +262,71 @@ it('exposes the content width from the project duration', () => {
   setup([track(1, { durationMs: 30_000 })]);
   act(() => transport.setState({ duration: 30 }));
   expect(content().style.width).toBe('600px');
+});
+
+describe('A–B loop region', () => {
+  const ruler = () => screen.getByTestId('ruler');
+
+  it('dragging on the ruler creates a loop region (and does not seek)', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    fireEvent.pointerDown(ruler(), { clientX: 100, buttons: 1 });
+    fireEvent.pointerMove(ruler(), { clientX: 250, buttons: 1 });
+    fireEvent.pointerUp(ruler(), { clientX: 250 });
+    expect(controller.setLoopRegion).toHaveBeenCalledWith({ a: 2, b: 5 });
+    expect(controller.seek).not.toHaveBeenCalled();
+  });
+
+  it('dragging right to left makes the same region', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    fireEvent.pointerDown(ruler(), { clientX: 250, buttons: 1 });
+    fireEvent.pointerMove(ruler(), { clientX: 100, buttons: 1 });
+    fireEvent.pointerUp(ruler(), { clientX: 100 });
+    expect(controller.setLoopRegion).toHaveBeenCalledWith({ a: 2, b: 5 });
+  });
+
+  it('a tiny movement is still a click: it seeks instead of creating a loop', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    fireEvent.pointerDown(ruler(), { clientX: 100, buttons: 1 });
+    fireEvent.pointerMove(ruler(), { clientX: 102, buttons: 1 });
+    fireEvent.pointerUp(ruler(), { clientX: 102 });
+    expect(controller.setLoopRegion).not.toHaveBeenCalled();
+    expect(controller.seek).toHaveBeenCalledWith(2.04);
+  });
+
+  it('highlights the loop region from the transport state, dimmed when looping is off', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    expect(screen.queryByTestId('loop-region')).toBeNull();
+    act(() => transport.setState({ loop: { a: 2, b: 5 }, loopEnabled: true }));
+    const region = screen.getByTestId('loop-region');
+    expect(region.style.left).toBe('100px');
+    expect(region.style.width).toBe('150px');
+    expect(region.getAttribute('data-enabled')).toBe('true');
+    act(() => transport.setState({ loopEnabled: false }));
+    expect(screen.getByTestId('loop-region').getAttribute('data-enabled')).toBe('false');
+  });
+
+  it('shows a marker for a pending Set A', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    act(() => transport.setState({ loopA: 4 }));
+    expect(screen.getByTestId('loop-a-marker').style.left).toBe('200px');
+  });
+
+  it('dragging a region edge previews it, and commits on release', () => {
+    view.setState({ pxPerSec: 50 });
+    setup([track(1)]);
+    act(() => transport.setState({ loop: { a: 2, b: 5 }, loopEnabled: true }));
+    const handle = screen.getByTestId('loop-handle-b');
+    fireEvent.pointerDown(handle, { clientX: 250, buttons: 1 });
+    fireEvent.pointerMove(handle, { clientX: 350, buttons: 1 });
+    expect(screen.getByTestId('loop-region').style.width).toBe('250px'); // preview: 2 s -> 7 s
+    expect(controller.adjustLoopEdge).not.toHaveBeenCalled();
+    fireEvent.pointerUp(handle, { clientX: 350 });
+    expect(controller.adjustLoopEdge).toHaveBeenCalledWith('b', 7);
+    expect(controller.seek).not.toHaveBeenCalled(); // grabbing a handle never seeks
+  });
 });

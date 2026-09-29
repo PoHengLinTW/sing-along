@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { type AddTrackInput, AudioEngine } from './engine';
+import { adjustEdge, type LoopRegion, makeLoop } from './loop';
 import { type MixerState, mixerStore } from './mixerStore';
 import { type TransportState, transportStore } from './transportStore';
 
@@ -74,6 +75,60 @@ export class AudioController {
   seek(sec: number): void {
     this.engine.seek(sec);
     this.store.setState({ position: this.engine.position });
+  }
+
+  /** A region made by dragging on the ruler: creates and enables the loop. False if it is too short. */
+  setLoopRegion(region: LoopRegion): boolean {
+    const valid = makeLoop(region.a, region.b);
+    if (!valid) return false;
+    this.store.setState({ loop: valid, loopEnabled: true, loopA: null });
+    this.applyLoop();
+    return true;
+  }
+
+  /**
+   * "Set A" / "Set B" at the playhead. With a loop, the edge moves (B stays >= 0.5 s after A);
+   * without one, A is remembered and B completes the region. False when B is rejected.
+   */
+  setLoopPoint(edge: 'a' | 'b'): boolean {
+    const position = this.engine.position;
+    const { loop, loopA, duration } = this.store.getState();
+    if (loop) {
+      this.store.setState({ loop: adjustEdge(loop, edge, position, duration) });
+      this.applyLoop();
+      return true;
+    }
+    if (edge === 'a') {
+      this.store.setState({ loopA: position });
+      return true;
+    }
+    if (loopA === null || position <= loopA) return false;
+    return this.setLoopRegion({ a: loopA, b: position });
+  }
+
+  toggleLoop(): void {
+    const { loop, loopEnabled } = this.store.getState();
+    if (!loop) return;
+    this.store.setState({ loopEnabled: !loopEnabled });
+    this.applyLoop();
+  }
+
+  clearLoop(): void {
+    this.store.setState({ loop: null, loopEnabled: false, loopA: null });
+    this.applyLoop();
+  }
+
+  /** Move an edge of the existing region to `sec` (dragging its handle). */
+  adjustLoopEdge(edge: 'a' | 'b', sec: number): void {
+    const { loop, duration } = this.store.getState();
+    if (!loop) return;
+    this.store.setState({ loop: adjustEdge(loop, edge, sec, duration) });
+    this.applyLoop();
+  }
+
+  private applyLoop(): void {
+    const { loop, loopEnabled } = this.store.getState();
+    this.engine.setLoop(loopEnabled && loop ? loop : null);
   }
 
   /** Back to the start; keeps playing if it was playing (the engine restarts its sources). */
