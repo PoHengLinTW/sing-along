@@ -28,7 +28,14 @@ export class Recorder {
     });
     this.settings = this.stream.getAudioTracks()[0].getSettings();
     const src = this.ctx.createMediaStreamSource(this.stream);
-    this.node = new AudioWorkletNode(this.ctx, 'recorder', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+    // Some devices ignore the mono getUserMedia constraint. Explicit channel count makes
+    // Web Audio downmix the input before the worklet reads channel 0.
+    this.node = new AudioWorkletNode(this.ctx, 'recorder', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: 1,
+      channelCountMode: 'explicit',
+    });
     // Some browsers only pull a worklet that reaches the destination; use a silent sink.
     const sink = this.ctx.createGain();
     sink.gain.value = 0;

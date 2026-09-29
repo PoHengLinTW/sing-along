@@ -24,5 +24,5 @@ Open questions to revisit.
 3. Single production app container (Fastify serves API + static web)
 4. Record-while-stopped starts playback + recording; Stop pauses playback
 5. Input device picker (choose USB mic) added in M2
-6. wavesurfer.js for rendering only; own Web Audio engine for playback (pending M0-07)
+6. ~~wavesurfer.js for rendering only; own Web Audio engine for playback~~ → confirmed by M0-07 (see CONCLUDE Q18)
 7. Track duration is client-reported (server doesn't decode)

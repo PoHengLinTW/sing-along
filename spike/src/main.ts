@@ -17,6 +17,33 @@ const support = checkMicSupport({
   hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
 });
 $('env').textContent = `${location.origin} | secure=${window.isSecureContext} | mic support=${support.ok ? 'yes' : support.reason}`;
+log(`Browser: ${navigator.userAgent}`);
+
+$<HTMLSelectElement>('output-path').onchange = (event) => {
+  log(`Output path: ${(event.target as HTMLSelectElement).value}`);
+};
+
+function reportText(): string {
+  return `M0 spike report\n${new Date().toISOString()}\n${$('env').textContent}\n${$('log').textContent}`;
+}
+
+$('copy-report').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(reportText());
+    log('Report copied to clipboard.');
+  } catch (error) {
+    log(`Could not copy report: ${(error as Error).message}. Use Download report instead.`);
+  }
+};
+
+$('download-report').onclick = () => {
+  const url = URL.createObjectURL(new Blob([reportText()], { type: 'text/plain' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'm0-spike-report.txt';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
 $('enable-mic').addEventListener('click', async () => {
   if (!support.ok) return log(`Cannot use mic: ${support.reason}`);
@@ -57,6 +84,7 @@ function renderTrack(t: EngineTrack): void {
     e.setLatency(t, +lat.value);
     div.querySelector('.lat-out')!.textContent = String(t.latencyOffsetMs);
   };
+  lat.onchange = () => log(`Aligned latency for ${t.name}: ${t.latencyOffsetMs} ms (${(document.querySelector('#output-path') as HTMLSelectElement).value})`);
   $('tracks').append(div);
 }
 
@@ -131,7 +159,9 @@ $('record').onclick = async () => {
 $('stop-record').onclick = async () => {
   if (!recorder) return;
   const e = getEngine();
+  const stopCtxTime = e.ctx.currentTime;
   const raw = await recorder.stop(0);
+  log(`Raw capture: ${raw.samples.length} samples @${raw.sampleRate}Hz = ${(takeDurationMs(raw.samples.length, raw.sampleRate) / 1000).toFixed(3)}s`);
   await writer?.close();
   if (currentTakeId) await (await getStore()).finishTake(currentTakeId);
   writer = null;
@@ -140,7 +170,7 @@ $('stop-record').onclick = async () => {
   const take: Take = { samples: t.samples, sampleRate: raw.sampleRate, startOffsetMs: Math.round(t.startSec * 1000) };
   recorder = null;
   takes.push(take);
-  log(`Take: ${take.samples.length} samples @${take.sampleRate}Hz = ${(takeDurationMs(take.samples.length, take.sampleRate) / 1000).toFixed(3)}s, startOffset ${take.startOffsetMs}ms`);
+  log(`Take: ${take.samples.length} samples @${take.sampleRate}Hz = ${(takeDurationMs(take.samples.length, take.sampleRate) / 1000).toFixed(3)}s, startOffset ${take.startOffsetMs}ms; stop requested @ctx ${stopCtxTime.toFixed(3)}s`);
   const buf = e.ctx.createBuffer(1, take.samples.length, take.sampleRate);
   buf.copyToChannel(take.samples as Float32Array<ArrayBuffer>, 0);
   renderTrack(e.addBuffer(`Take ${takes.length}`, buf, take.startOffsetMs));

@@ -48,17 +48,18 @@ $('a-probe').onclick = () => {
   const t0 = performance.now();
   const off = offsets();
   mt.play();
-  log('(a) drift probe started: max |audio.currentTime - expected| across tracks, every 10 s');
+  log('(a) drift probe started: signed track errors vs shared playhead and inter-track spread, every 10 s');
   aProbe = window.setInterval(() => {
     const m = mt as unknown as { audios: HTMLAudioElement[]; getCurrentTime(): number };
     const now = m.getCurrentTime();
     // multitrack keeps one extra audio (the drop-target track) after ours: only look at our tracks
     const errs = m.audios.map((a, i) => {
       if (i >= files.length || a.paused) return NaN;
-      return Math.abs(a.currentTime - (now - (off[i] ?? 0) / 1000)) * 1000;
+      return (a.currentTime - (now - (off[i] ?? 0) / 1000)) * 1000;
     });
     const finite = errs.filter((e) => !Number.isNaN(e));
-    log(`(a) t=${((performance.now() - t0) / 1000).toFixed(0)}s wall, playhead ${now.toFixed(2)}s, spread ${finite.length ? Math.max(...finite).toFixed(1) : 'n/a'} ms (per track ms: ${errs.map((e) => (Number.isNaN(e) ? '-' : e.toFixed(0))).join('/')})`);
+    const spread = finite.length > 1 ? Math.max(...finite) - Math.min(...finite) : NaN;
+    log(`(a) t=${((performance.now() - t0) / 1000).toFixed(0)}s wall, playhead ${now.toFixed(2)}s, inter-track spread ${Number.isNaN(spread) ? 'n/a' : spread.toFixed(1)} ms (signed track errors ms: ${errs.map((e) => (Number.isNaN(e) ? '-' : e.toFixed(0))).join('/')})`);
   }, 10000);
 };
 
@@ -112,15 +113,17 @@ $('b-probe').onclick = () => {
   if (!engine) return;
   clearInterval(bProbe);
   const e = engine;
-  void e.play();
+  void e.play().then(() => log(`(b) playback started, context ${e.ctx.state}`)).catch((error) => log(`(b) playback failed: ${error.message}`));
   const t0 = performance.now();
   const c0 = e.ctx.currentTime;
-  log('(b) sync probe: playhead (ctx clock) vs wall clock drift, and reported output latency');
+  log('(b) sync probe: rendered playhead vs AudioContext timeline, ctx vs wall clock, and reported output latency');
   bProbe = window.setInterval(() => {
     const wall = (performance.now() - t0) / 1000;
     const ctxElapsed = e.ctx.currentTime - c0;
+    const renderedSec = Number.parseFloat($('b-playhead').style.left || '0') / pxPerSec();
+    const playheadErrorMs = (renderedSec - e.position) * 1000;
     const l = e.reportedLatencyMs;
-    log(`(b) wall ${wall.toFixed(1)}s, ctx ${ctxElapsed.toFixed(3)}s, ctx-wall ${((ctxElapsed - wall) * 1000).toFixed(1)} ms, reported latency ${(l.base + l.output).toFixed(1)} ms`);
+    log(`(b) wall ${wall.toFixed(1)}s, state ${e.ctx.state}, playing ${e.playing}, ctx ${ctxElapsed.toFixed(3)}s, ctx-wall ${((ctxElapsed - wall) * 1000).toFixed(1)} ms, rendered-playhead ${playheadErrorMs.toFixed(1)} ms, reported latency ${(l.base + l.output).toFixed(1)} ms`);
   }, 10000);
 };
 

@@ -299,10 +299,9 @@ A fullstack Progressive Web App for practicing group harmony singing:
 ## Q18: M0 spike findings
 
 **Decision:**
-- **Playback:** own Web Audio engine; wavesurfer.js v7 only renders precomputed peaks. The multitrack plugin is a separate stale package (`wavesurfer-multitrack` 0.4.12) that plays through media elements and showed a fixed ~25-205 ms misalignment between tracks in a Chromium probe. Our engine's clock stayed within ~5 ms of wall time.
-- **FLAC encoder:** libflacjs (asm.js build) in a Web Worker, WAV as the fallback. 4 min of mono took ~0.5-0.7 s on desktop; FLAC and WAV output decoded in Chromium, Firefox and WebKit (desktop, headless). iPhone timing still to be measured by hand.
-- **Not automated, still manual:** mic capture on real devices (getUserMedia hung with Chromium's fake device in headless mode), iPhone memory and latency, Bluetooth offsets, audible sync.
-- **Probe length:** drift was measured over 30 s instead of 5 min. If drift shows up in production, fix it then.
+- **Playback:** own Web Audio engine; wavesurfer.js v7 only renders precomputed peaks. The multitrack plugin is a separate stale package (`wavesurfer-multitrack` 0.4.12) that plays through media elements. A five-minute headless Chromium probe found a fixed 168.3 ms inter-track spread at 300 s; the rendered playhead in our approach stayed within 11.7 ms of its AudioContext timeline.
+- **FLAC encoder:** libflacjs (asm.js build) in a Web Worker, WAV as the fallback. A same-input comparison with Mediabunny WASM in headless Chromium, Firefox and WebKit kept libflacjs as the provisional choice based on smaller integration and faster results in two engines. Both made valid 16-bit mono FLAC; iPhone timing still needs measurement.
+- **Still manual:** mic capture on real devices, iPhone memory and latency, Bluetooth offsets, and audible sync. A fake-mic Chromium probe at a nonzero playhead captured 60.018 s of audio in a nominal 60 s run; the earlier apparent shortfall came from intentional trimming before timeline zero.
 
 Details and numbers: `spike/SPIKE_NOTES.md`.
 
