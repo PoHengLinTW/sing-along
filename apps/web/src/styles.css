@@ -201,6 +201,7 @@ button.danger {
   background: #fff8;
   font-size: 0.8rem;
   pointer-events: none;
+  z-index: 2; /* above wavesurfer's own layers, level with the playhead (which is later in the DOM) */
 }
 .lane-status button {
   pointer-events: auto; /* the status overlay lets scrubs through; its Retry must stay clickable */

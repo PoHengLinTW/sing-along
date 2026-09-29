@@ -14,7 +14,7 @@ anything. Don't put it anywhere you wouldn't want that.
 | M0 Audio spike | Done, apart from manual device checks (`spike/SPIKE_NOTES.md`) |
 | M1 Core player | **Implemented** (this is what runs today) |
 | M2 Recording | **Implemented**; desktop pass done, iPhone and Safari checks still open (`tasks/M2.md`) |
-| M3 Hardening and deploy | **Built** (caps, cleanup, error states, Docker image, compose stack); the first real deploy and its smoke test are still to do (`tasks/M3.md`) |
+| M3 Hardening and deploy | **Built** (caps, cleanup, error states, Docker image, compose stack, E2E suite); the R2 setup and the first real deploy are still to do (`tasks/M3.md`) |
 | M4 PWA and mobile | Not started |
 
 ### What works today (M1)
@@ -149,6 +149,16 @@ with PostgreSQL and the S3 stand-in as services.
 
 `main` is protected: changes go in through a pull request, and the `check` job must pass
 before it can merge.
+
+### End-to-end tests
+
+`pnpm e2e` builds the app and runs the Playwright suite in `e2e/` (75 tests: every flow of M1, M2
+and M3) against the built server, Postgres and the S3 stand-in, with Chromium's fake microphone.
+It needs the dev compose stack running and Chromium installed once
+(`pnpm --filter @sing-along/e2e exec playwright install chromium`). The suite uses its own
+database (`singalong_e2e`) and bucket (`sing-along-e2e`), recreated on every run, so it never
+touches your dev data. Failed tests leave a trace in `e2e/test-results`
+(`pnpm --filter @sing-along/e2e exec playwright show-trace <trace.zip>`).
 
 ### About the tests
 
