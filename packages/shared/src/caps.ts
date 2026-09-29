@@ -43,5 +43,5 @@ const MB = 1024 * 1024;
 export const formatBytes = (n: number): string => {
   if (n >= 1024 * MB) return `${+(n / (1024 * MB)).toFixed(1)} GB`;
   if (n >= MB) return `${+(n / MB).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return n <= 0 ? '0 KB' : `${Math.max(1, Math.round(n / 1024))} KB`;
 };

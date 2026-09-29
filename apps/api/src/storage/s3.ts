@@ -2,12 +2,13 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Config } from '../config';
-import type { ObjectInfo, Storage } from './types';
+import type { ListedObject, ObjectInfo, Storage } from './types';
 
 export function createS3Client(s3: Config['s3']): S3Client {
   return new S3Client({
@@ -73,12 +74,42 @@ export class S3Storage implements Storage {
   async deleteObjects(keys: string[]): Promise<void> {
     for (let i = 0; i < keys.length; i += 1000) {
       const batch = keys.slice(i, i + 1000);
-      await this.client.send(
+      const out = await this.client.send(
         new DeleteObjectsCommand({
           Bucket: this.bucket,
           Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
         }),
       );
+      // Quiet mode reports per-key failures in the body instead of throwing.
+      if (out?.Errors?.length) {
+        const failed = out.Errors.map((e) => `${e.Key} (${e.Code})`).join(', ');
+        throw new Error(`Storage refused to delete: ${failed}`);
+      }
     }
+  }
+
+  async list(prefix: string): Promise<ListedObject[]> {
+    const found: ListedObject[] = [];
+    let token: string | undefined;
+    do {
+      const out = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      for (const o of out.Contents ?? []) {
+        if (o.Key) {
+          found.push({
+            key: o.Key,
+            sizeBytes: o.Size ?? 0,
+            lastModified: o.LastModified ?? new Date(0),
+          });
+        }
+      }
+      token = out.IsTruncated ? out.NextContinuationToken : undefined;
+    } while (token);
+    return found;
   }
 }

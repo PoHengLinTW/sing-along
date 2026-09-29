@@ -50,6 +50,16 @@ describe('loadConfig', () => {
     });
   });
 
+  it('schedules the cleanup nightly by default and lets it be switched off', () => {
+    expect(loadConfig(valid).cleanupCron).toBe('30 3 * * *');
+    expect(loadConfig({ ...valid, CLEANUP_CRON: '0 4 * * 0' }).cleanupCron).toBe('0 4 * * 0');
+    expect(loadConfig({ ...valid, CLEANUP_CRON: 'off' }).cleanupCron).toBeNull();
+  });
+
+  it('rejects an invalid cleanup schedule at startup', () => {
+    expect(() => loadConfig({ ...valid, CLEANUP_CRON: 'every night' })).toThrow(/CLEANUP_CRON/);
+  });
+
   it('rejects a non-positive cap', () => {
     expect(() => loadConfig({ ...valid, MAX_PROJECTS: '0' })).toThrow(/MAX_PROJECTS/);
   });

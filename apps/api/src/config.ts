@@ -1,5 +1,15 @@
 import type { Caps } from '@sing-along/shared';
+import { Cron } from 'croner';
 import { z } from 'zod';
+
+const validCron = (v: string) => {
+  try {
+    new Cron(v, { paused: true }).stop();
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const positive = (def: number) => z.coerce.number().positive().default(def);
 
@@ -22,6 +32,14 @@ const envSchema = z.object({
   MAX_TRACKS_PER_PROJECT: z.coerce.number().int().positive().default(10),
   MAX_PROJECTS: z.coerce.number().int().positive().default(100),
   MAX_STORAGE_GB: positive(8),
+  /** Cron pattern for the orphan/pending cleanup, or "off". Server local time. */
+  CLEANUP_CRON: z
+    .string()
+    .refine(
+      (v) => v === 'off' || validCron(v),
+      'must be a cron pattern such as "30 3 * * *", or "off"',
+    )
+    .default('30 3 * * *'),
   PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
@@ -39,6 +57,8 @@ export interface Config {
   publicOrigin: string;
   presignTtlSec: number;
   caps: Caps;
+  /** null = the nightly cleanup is switched off. */
+  cleanupCron: string | null;
 }
 
 export class ConfigError extends Error {}
@@ -70,6 +90,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     publicOrigin: e.PUBLIC_ORIGIN,
     presignTtlSec: e.PRESIGN_TTL_SECONDS,
+    cleanupCron: e.CLEANUP_CRON === 'off' ? null : e.CLEANUP_CRON,
     caps: {
       maxFileBytes: Math.floor(e.MAX_FILE_MB * 1024 * 1024),
       maxTrackMs: Math.floor(e.MAX_TRACK_MINUTES * 60_000),

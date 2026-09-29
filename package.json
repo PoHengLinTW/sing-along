@@ -12,6 +12,7 @@
     "format": "biome check --write .",
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
+    "cleanup": "pnpm --filter @sing-along/api cleanup",
     "db:generate": "pnpm --filter @sing-along/api db:generate",
     "db:migrate": "pnpm --filter @sing-along/api db:migrate"
   },
