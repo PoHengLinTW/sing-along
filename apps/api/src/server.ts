@@ -18,7 +18,13 @@ try {
 
 const { db } = createDb(config.databaseUrl);
 const storage = new S3Storage(createS3Client(config.s3), config.s3.bucket);
-const app = buildApp({ db, storage, presignTtlSec: config.presignTtlSec, caps: config.caps });
+const app = buildApp({
+  db,
+  storage,
+  presignTtlSec: config.presignTtlSec,
+  caps: config.caps,
+  logger: { level: 'error' }, // unexpected errors and failed storage deletes; not every request
+});
 const cleanup = scheduleCleanup(
   config.cleanupCron,
   () => runCleanup({ db, storage, log: { info: (m) => console.log(m) } }),

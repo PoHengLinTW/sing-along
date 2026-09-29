@@ -1,6 +1,6 @@
 import type { Caps, HealthResponse } from '@sing-along/shared';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import Fastify from 'fastify';
+import Fastify, { type FastifyServerOptions } from 'fastify';
 import { registerErrorHandler } from './errors';
 import { registerLabelRoutes } from './routes/labels';
 import { registerProjectRoutes } from './routes/projects';
@@ -15,10 +15,12 @@ export interface Deps {
   presignTtlSec?: number;
   /** Storage caps (PRD §5.9); defaults to `DEFAULT_CAPS`. */
   caps?: Caps;
+  /** Fastify logger options; off by default so tests stay quiet. The server logs errors. */
+  logger?: FastifyServerOptions['logger'];
 }
 
 export function buildApp(deps: Deps) {
-  const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 }); // peaks JSON can reach ~500 KB;
+  const app = Fastify({ logger: deps.logger ?? false, bodyLimit: 2 * 1024 * 1024 }); // peaks JSON can reach ~500 KB;
   registerErrorHandler(app);
   app.get('/api/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
   registerProjectRoutes(app, deps);

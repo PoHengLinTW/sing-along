@@ -1,6 +1,7 @@
 import type { TrackDto } from '@sing-along/shared';
 import { useId, useState } from 'react';
 import { apiFetch } from '../api/client';
+import { LabelsLoadError } from '../lib/LabelsLoadError';
 import { useLabels } from '../lib/useLabels';
 import { LabelPicker } from '../ui/LabelPicker';
 import { Modal } from '../ui/Modal';
@@ -28,7 +29,7 @@ function LabelEditorBody({
   onClose,
   onSaved,
 }: Omit<Props, 'open'> & { titleId: string }) {
-  const { labels, create } = useLabels();
+  const { labels, create, isError: labelsFailed, retry: retryLabels } = useLabels();
   const initial = track.labels.map((l) => l.id);
   const [ids, setIds] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ function LabelEditorBody({
   return (
     <div>
       <h2 id={titleId}>{`Labels for ${track.name}`}</h2>
+      {labelsFailed && <LabelsLoadError onRetry={retryLabels} />}
       <LabelPicker labels={labels} selectedIds={ids} onChange={setIds} onCreate={create} />
       {error && <p className="field-error">{error}</p>}
       <div className="dialog-actions">

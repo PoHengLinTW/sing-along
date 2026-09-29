@@ -24,6 +24,8 @@ interface Props {
   status?: StoreApi<StatusState>;
   live?: LiveWave;
   recording?: StoreApi<RecordingState>;
+  /** Reload a track whose audio failed to download. */
+  onRetryAudio?: (trackId: number) => void;
 }
 
 type Gesture =
@@ -49,6 +51,7 @@ export function Timeline({
   status = trackStatusStore,
   live = liveWave,
   recording = recordingStore,
+  onRetryAudio,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -253,7 +256,13 @@ export function Timeline({
             ))}
           </div>
           {tracks.map((track) => (
-            <Lane key={track.id} track={track} pxPerSec={pxPerSec} status={status} />
+            <Lane
+              key={track.id}
+              track={track}
+              pxPerSec={pxPerSec}
+              status={status}
+              onRetry={onRetryAudio}
+            />
           ))}
           {drafts.map((d) => (
             <DraftLane key={d.id} draft={d} pxPerSec={pxPerSec} status={status} />
@@ -305,10 +314,12 @@ function Lane({
   track,
   pxPerSec,
   status,
+  onRetry,
 }: {
   track: TrackDto;
   pxPerSec: number;
   status: StoreApi<StatusState>;
+  onRetry?: (trackId: number) => void;
 }) {
   const state = useStore(status, (s) => s.byId[track.id]);
   const left = secToPx((track.startOffsetMs + track.latencyOffsetMs) / 1000, pxPerSec);
@@ -329,7 +340,21 @@ function Lane({
       />
       {state !== 'ready' && (
         <div role="status" className="lane-status">
-          {state === 'error' ? "Couldn't load audio" : 'Loading audio…'}
+          {state === 'error' ? (
+            <>
+              Failed to load audio —{' '}
+              <button
+                type="button"
+                // The lane background scrubs the playhead: keep this click out of that gesture.
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onRetry?.(track.id)}
+              >
+                Retry
+              </button>
+            </>
+          ) : (
+            'Loading audio…'
+          )}
         </div>
       )}
     </div>

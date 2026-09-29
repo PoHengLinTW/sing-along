@@ -59,6 +59,12 @@ export class AudioSync {
     }
   }
 
+  /** Reloads a track whose download failed; does nothing for one that is loading or ready. */
+  retry(id: number): void {
+    const track = this.known.get(id);
+    if (track && !this.inEngine.has(id) && !this.loading.has(id)) void this.start(track);
+  }
+
   dispose(): void {
     for (const id of [...this.known.keys()]) this.drop(id);
   }

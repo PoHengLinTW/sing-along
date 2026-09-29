@@ -47,7 +47,7 @@ export function registerErrorHandler(app: FastifyInstance) {
     if (status && status >= 400 && status < 500) {
       return reply.status(status).send({ message: (err as Error).message } satisfies ApiError);
     }
-    req.log.error(err);
+    req.log.error({ err, method: req.method, url: req.url }, 'unhandled error');
     return reply
       .status(500)
       .send({ message: 'Something went wrong on the server.' } satisfies ApiError);

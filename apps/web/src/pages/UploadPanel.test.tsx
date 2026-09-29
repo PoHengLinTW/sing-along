@@ -239,3 +239,25 @@ describe('UploadPanel caps (M3-03)', () => {
     expect(screen.getByText('Track limit reached (4).')).toBeTruthy();
   });
 });
+
+describe('UploadPanel: labels fetch failure (M3-05)', () => {
+  it('shows a Retry when the labels cannot be loaded, and loads them on retry', async () => {
+    let n = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => (++n === 1 ? json(500, { message: 'x' }) : json(200, labels))),
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <UploadPanel projectId={5} deps={makeDeps()} />
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+    await userEvent.upload(chooser(), flac());
+    expect(await screen.findByText(/couldn't load labels/i)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(await screen.findByText('Alto')).toBeTruthy();
+    expect(screen.queryByText(/couldn't load labels/i)).toBeNull();
+  });
+});
