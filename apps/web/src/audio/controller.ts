@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla';
 import { type AddTrackInput, AudioEngine } from './engine';
+import { type MixerState, mixerStore } from './mixerStore';
 import { type TransportState, transportStore } from './transportStore';
 
 interface Frames {
@@ -18,10 +19,28 @@ export class AudioController {
       requestFrame: (cb) => requestAnimationFrame(cb),
       cancelFrame: (id) => cancelAnimationFrame(id),
     },
-  ) {}
+    private mixer: StoreApi<MixerState> = mixerStore,
+  ) {
+    // Mixer edits reach the gain nodes immediately, playing or not, without restarting playback.
+    this.mixer.subscribe((state, prev) => {
+      for (const id of new Set(
+        [...Object.keys(state.byId), ...Object.keys(prev.byId)].map(Number),
+      )) {
+        if (state.byId[id] !== prev.byId[id]) this.applyMix(id);
+      }
+    });
+  }
+
+  private applyMix(id: number): void {
+    const mix = this.mixer.getState().get(id);
+    this.engine.setVolume(id, mix.volume);
+    this.engine.setMuted(id, mix.muted);
+    this.engine.setSolo(id, mix.solo);
+  }
 
   addTrack(input: AddTrackInput): void {
     this.engine.addTrack(input);
+    this.applyMix(input.id); // a late-loading track picks up the mix already set for it
     this.syncDuration();
   }
 

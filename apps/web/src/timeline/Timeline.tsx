@@ -17,7 +17,10 @@ interface Props {
   status?: StoreApi<StatusState>;
 }
 
-const LANE_HEIGHT = 80;
+export const LANE_HEIGHT = 112;
+export const LANE_MARGIN = 2;
+/** Height of the ruler including its border: the track panel column starts below it. */
+export const RULER_HEIGHT = 25;
 const NEUTRAL_COLOR = '#94a3b8';
 const ZOOM_STEP = 1.25;
 

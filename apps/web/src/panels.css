@@ -1,0 +1,69 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+.timeline {
+  position: relative;
+}
+.timeline-controls {
+  position: absolute;
+  top: -1.9rem;
+  right: 0;
+  margin: 0;
+}
+.panels {
+  padding-top: 1px; /* the timeline scroller has a 1px border */
+}
+.track-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid #8884;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.panel-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.panel-top .editable {
+  flex: 1;
+  margin: 0;
+}
+.panel-mix {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.panel-mix input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.vol-readout {
+  font-size: 0.75rem;
+  width: 2.6rem;
+}
+.drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+button[aria-pressed="true"] {
+  background: #2563eb;
+  color: #fff;
+}
+.track-panel .editable input {
+  padding: 1px 3px;
+}

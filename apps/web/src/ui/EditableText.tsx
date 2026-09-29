@@ -7,12 +7,22 @@ interface Props {
   multiline?: boolean;
   validate?: (value: string) => string | null;
   placeholder?: string;
+  /** Keep the label for screen readers but hide it visually (dense layouts). */
+  labelHidden?: boolean;
 }
 
 const SAVED_VISIBLE_MS = 2000;
 
 /** Text that saves itself: on blur, or on Enter for single-line fields. Esc undoes the edit. */
-export function EditableText({ label, value, onSave, multiline, validate, placeholder }: Props) {
+export function EditableText({
+  label,
+  value,
+  onSave,
+  multiline,
+  validate,
+  placeholder,
+  labelHidden,
+}: Props) {
   const id = useId();
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +91,9 @@ export function EditableText({ label, value, onSave, multiline, validate, placeh
 
   return (
     <div className="editable">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id} className={labelHidden ? 'sr-only' : undefined}>
+        {label}
+      </label>
       {multiline ? <textarea rows={3} {...shared} /> : <input type="text" {...shared} />}
       {saved && <span className="saved">Saved</span>}
       {error && (

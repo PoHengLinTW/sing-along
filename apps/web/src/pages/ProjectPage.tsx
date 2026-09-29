@@ -6,6 +6,7 @@ import { useProjectAudio } from '../audio/useProjectAudio';
 import { Timeline } from '../timeline/Timeline';
 import { NotFound } from './NotFound';
 import { ProjectHeader } from './ProjectHeader';
+import { TrackPanels } from './TrackPanels';
 import { UploadPanel } from './UploadPanel';
 
 const EMPTY: never[] = [];
@@ -27,7 +28,10 @@ export function ProjectPage() {
   return (
     <section>
       <ProjectHeader project={query.data} />
-      <Timeline tracks={query.data.tracks} />
+      <div className="workspace">
+        <TrackPanels project={query.data} />
+        <Timeline tracks={query.data.tracks} />
+      </div>
       <UploadPanel projectId={query.data.id} />
     </section>
   );
