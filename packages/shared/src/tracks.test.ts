@@ -47,8 +47,20 @@ describe('uploadUrlRequestSchema', () => {
     expect(uploadUrlRequestSchema.parse(min)).toMatchObject({
       performer: null,
       startOffsetMs: 0,
+      latencyOffsetMs: 0,
       labels: [],
     });
+  });
+  it('takes an optional latency offset, bounded to ±600000 ms like PATCH', () => {
+    expect(uploadUrlRequestSchema.parse({ ...valid, latencyOffsetMs: -85 }).latencyOffsetMs).toBe(
+      -85,
+    );
+    expect(uploadUrlRequestSchema.safeParse({ ...valid, latencyOffsetMs: 600001 }).success).toBe(
+      false,
+    );
+    expect(uploadUrlRequestSchema.safeParse({ ...valid, latencyOffsetMs: 1.5 }).success).toBe(
+      false,
+    );
   });
   it('requires a name of 1-200 characters', () => {
     expect(uploadUrlRequestSchema.safeParse({ ...valid, name: '' }).success).toBe(false);

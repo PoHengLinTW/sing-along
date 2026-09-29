@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTypingTarget, transportShortcut } from './shortcuts';
+import { isTypingTarget, recordShortcut, transportShortcut } from './shortcuts';
 
 const el = (html: string) => {
   const host = document.createElement('div');
@@ -61,5 +61,31 @@ describe('transportShortcut', () => {
     expect(transportShortcut(key('ArrowLeft', { altKey: true }))).toBeNull();
     expect(transportShortcut(key('Home', { metaKey: true }))).toBeNull();
     expect(transportShortcut(key(' ', { ctrlKey: true }))).toBeNull();
+  });
+});
+
+describe('recordShortcut', () => {
+  it('maps R to record/stop and M to mic mute, in either case', () => {
+    expect(recordShortcut(key('r'))).toBe('record');
+    expect(recordShortcut(key('R'))).toBe('record');
+    expect(recordShortcut(key('m'))).toBe('mic-mute');
+    expect(recordShortcut(key('M'))).toBe('mic-mute');
+  });
+  it('ignores other keys, and leaves the transport keys to the transport', () => {
+    expect(recordShortcut(key('a'))).toBeNull();
+    expect(recordShortcut(key(' '))).toBeNull();
+    expect(transportShortcut(key('r'))).toBeNull();
+  });
+  it('is ignored while typing in a text field, and with a modifier (Ctrl+R reloads, Cmd+M minimises)', () => {
+    for (const k of ['r', 'm']) {
+      expect(recordShortcut(key(k, { target: el('<input type="text">') }))).toBeNull();
+      expect(recordShortcut(key(k, { target: el('<textarea></textarea>') }))).toBeNull();
+      expect(
+        recordShortcut(key(k, { target: el('<div contenteditable="true"></div>') })),
+      ).toBeNull();
+      expect(recordShortcut(key(k, { ctrlKey: true }))).toBeNull();
+      expect(recordShortcut(key(k, { metaKey: true }))).toBeNull();
+      expect(recordShortcut(key(k, { altKey: true }))).toBeNull();
+    }
   });
 });

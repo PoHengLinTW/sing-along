@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. Recording (M2), caps/deploy (M3) and PWA (M4) are not built yet. The architecture below is real for M1 and still a plan for the parts marked "(M2+)". Update this file as real code and commands land.
+**M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. **M2** (recording) is implemented (branch `m2-recording`, PR #3) and its desktop device pass is confirmed; the iPhone criteria are deferred by the user, and Bluetooth numbers plus desktop Safari / Android Chrome are still open (see `tasks/M2.md`). Caps/deploy (M3) and PWA (M4) are not built yet. Update this file as real code and commands land.
 
 ### Where things are (M1)
 
@@ -15,6 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Ports: web 5173, API 3100 (3000 and 5432 are often taken locally), Postgres 5433, S3 9000.
 - The engine plays the timeline as scheduled "segments" on the AudioContext clock; loops are scheduled ahead so wraps have no gap. The position lives in a zustand store written per animation frame: read it with selectors or a store subscription, never from broad React state.
 - Never run long waits without a timeout; and gate every commit on `pnpm lint && pnpm typecheck && pnpm test`.
+
+### Where things are (M2, recording)
+
+- `apps/web/src/audio/recorder/`: `mic.ts` (constraints, device, errors), `MicSetup`/`LevelMeter`/`RecordControls`/`EncodeStatus` (UI), `recorder.ts` + `recorder.worklet.ts` + `chunker.ts` (worklet capture, ~1 s chunks, mute = zeros), `level.ts` + `liveWave.ts` (meter and live-lane maths), `draftStore.ts` (IndexedDB drafts + `ChunkWriter`), `session.ts` (`RecordingSession`: mic → playback → chunks → draft), `encode/` (pure `encodeTake`, FLAC via libflacjs, WAV fallback, worker + client, `finalizeDraft`), `encoder.ts` (`DraftEncoder`), `useDrafts.ts` (list + crash recovery), `uploadDraft.ts`, `timing.ts` (take placement), `draftView.ts` (engine id of a draft).
+- A draft's engine/mixer id is a stable **negative** number derived from its UUID (`draftEngineId`), so drafts flow through the same engine, mixer and mix persistence as tracks. Only `ready` (encoded) drafts get lanes and panels.
+- The playback controller has a recording lock (`beginRecording`/`endRecording`): seek, loop and pause are no-ops while a take runs, and the playhead may pass the last track (`engine.setOpenEnded`).
+- Latency offsets are edited through `audio/latency.ts` (pending values applied to tracks and drafts at once, saved after 500 ms: PATCH for tracks, IndexedDB for drafts).
+- `POST /api/projects/:id/tracks/upload-url` takes an optional `latencyOffsetMs`; a draft uploads with `source = 'recording'` through `uploadPrepared` (`api/upload.ts`).
+- Real-browser probes for M2 live in `spike/probe/` (`m2-record-smoke.mjs` drives the whole flow with Chromium's fake microphone against the dev stack; it needs `pnpm dev`, and Vite may pick a port other than 5173: pass `BASE`). Vitest's fake-indexeddb drops jsdom's `Blob`: seed test drafts with `node:buffer`'s `Blob` if a test reads them back.
 
 ## Handover (read this first in a new session)
 
@@ -42,10 +51,10 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
   - `packages/shared`: types, zod schemas, pure logic such as the LRC parser
 - **Audio never passes through the API.** The browser uploads to and downloads from Cloudflare R2 directly with **presigned URLs**. The flow is `upload-url` (cap checks, creates a `pending` track, returns a PUT URL signed with the exact Content-Length) → PUT → `confirm` (HEAD check, marks the track `active`). RustFS (an S3-compatible store; MinIO images are no longer published) stands in for R2 in dev and CI.
 - **Playback:** Uses our own Web Audio engine (`AudioBufferSourceNode` + a GainNode per track). wavesurfer.js only *renders* waveforms from precomputed peaks (decided in M0-07; pinned to v7). A track plays at `start_offset_ms + latency_offset_ms`. The scheduling, solo and loop math are pure functions with unit tests.
-- **Recording (M2+, not built yet; the spike proved the approach):**
+- **Recording (M2, built; see "Where things are (M2)"):**
   - AudioWorklet mono capture with echoCancellation, noiseSuppression and autoGainControl **off**.
   - PCM chunks are written to IndexedDB *during* recording, so a crash doesn't lose the take.
-  - On Stop, a Web Worker encodes FLAC 16-bit mono with WASM (WAV as the fallback).
+  - On Stop, a Web Worker encodes FLAC 16-bit mono (libflacjs asm.js build; WAV as the fallback).
   - The take becomes a local draft, and is uploaded only when the user confirms. `MediaRecorder` is not used.
 - **Tracks can't be changed after upload.** A new take means a new track. The audio cache (Cache API) is keyed by **track ID**, not by presigned URL, and depends on this.
 - **Mixer state** (volume, mute, solo, zoom) lives only in each browser's localStorage and is never sent to the server.

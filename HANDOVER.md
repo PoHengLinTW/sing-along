@@ -1,6 +1,6 @@
-# Handover: starting M2 (recording)
+# Handover: M2 is built and in review (PR #3)
 
-Written at the end of the M0/M1 session (main at `8844ebb`, 2026-09-29) for the next Claude session.
+Written at the end of the M2 session (branch `m2-recording`, 2026-09-28) for the next Claude session.
 Read this after `CLAUDE.md` and before touching code. If something here disagrees with the code,
 the code wins: fix this file.
 
@@ -8,68 +8,60 @@ the code wins: fix this file.
 
 | Milestone | State |
 |---|---|
-| M0 spike (`spike/`) | Work continues in the `m0-completion` worktree. **11 of 32 acceptance criteria ticked** in `tasks/M0.md`; real-device and listening checks remain. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
-| M1 core player | Implemented. **78 of 87 criteria ticked** in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. CI is green on `main`. |
-| M2 recording | **Not started. This is your job.** Tasks are in `tasks/M2.md` (M2-01 .. M2-11). |
+| M0 spike (`spike/`) | Work continued in the `m0-completion` worktree (merged as PR #4). **11 of 32 acceptance criteria ticked** in `tasks/M0.md`; real-device and listening checks remain. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
+| M1 core player | Implemented. 78 of 87 criteria ticked in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. Merged to `main`. |
+| M2 recording | **Implemented and in review: PR #3** (`m2-recording` → `main`, `check` job green; check whether it has been merged). M2-01 to M2-10 are one commit each. **M2-11 desktop pass: confirmed by the user.** Still open in `tasks/M2.md`, each with an `_(open/Deferred: ...)_` note: the iPhone criteria (deferred by the user), Bluetooth delay numbers, and the desktop Safari / Android Chrome leg. |
+| M3, M4 | Not started. E2E (Playwright) is first required in M3 and must cover the M1 and M2 user flows. |
 
-Two independent audits (one per milestone) were run; their conclusions are folded into sections 4 and 5.
+Gate at the end of the branch (and CI on the PR): `pnpm lint && pnpm typecheck && pnpm test` green (shared 31, api 66, web 543).
 
 ## 2. How we work (rules that were enforced, not just written)
 
-- `CLAUDE.md` is the source of truth for the process. The essentials:
-  - **TDD**: write the failing tests first (they must fail for the right reason), then implement.
-  - **One commit per task**, subject `M2-03: ...`, body = the **design decisions** (what, why, what was rejected).
-  - **`main` is protected**: no direct pushes, not even for admins. Work on a branch (`m2-recording`), push, open a PR, merge when the `check` job is green and the branch is up to date. Squash or merge as you like; keep the per-task commits on the branch.
-  - Gate every commit on `pnpm lint && pnpm typecheck && pnpm test` (chain them with `&&`; an earlier commit slipped through with lint errors).
-  - E2E (Playwright) is only required from M3 on; M2 relies on unit/integration tests plus manual checks.
-- When a decision changes, update `PRD.md`, `CONCLUDE.md` (latest entry is Q20) and the task's criteria together.
-- Tick a task's `- [ ]` boxes only when verified; use `_(open: ...)_` notes for what is missing.
+- `CLAUDE.md` is the source of truth for the process: **TDD** (failing tests first), **one commit per task** (subject `M2-03: ...`, body = design decisions), `main` is protected (branch, push, PR, green `check` job), gate every commit with `pnpm lint && pnpm typecheck && pnpm test`.
+- When a decision changes, update `PRD.md`, `CONCLUDE.md` (latest entry is **Q21**, M2 decisions) and the task's criteria together. Tick a `- [ ]` only when verified; use `_(open: ...)_` for what is missing.
+- Commit messages: write the body to a file in the scratchpad and use `git commit -F <file>` (see gotchas).
 
-## 3. What M2 can build on (already in the repo)
+## 3. What M2 delivered (short map; details in `CLAUDE.md` "Where things are (M2)")
 
-- **Spike code to port** (list also in `spike/SPIKE_NOTES.md`): `spike/src/capture/` (`recorder.worklet.ts`, `recorder.ts`, `take.ts`, `store.ts` with `TakeStore` + `ChunkWriter`), `spike/src/encode/` (`pcm.ts`, `flac.ts`, `encode.worker.ts`, `client.ts`), `spike/src/mic.ts`. They have tests; port the tests with them. FLAC: `libflacjs` asm.js build (chosen provisionally after comparison with Mediabunny WASM in three headless desktop engines; iPhone timing remains open).
-- **Timeline math you need already exists** in `apps/web/src/audio/`: `loop.ts` has `positionAt(segments, ctxTime)`; the engine plays "segments" scheduled on the AudioContext clock (`engine.ts`). To place a take, map the first captured frame's `currentTime` onto the timeline with that, as the spike did with `timelineAt`, and trim samples that fall before timeline 0.
-- **Upload pipeline** is reusable: `apps/web/src/api/upload.ts` (`uploadTrack`, already supports `source: 'upload' | 'recording'` in the API; the client currently sends `'upload'`), `put.ts` (XHR with progress), `pages/UploadPanel.tsx`.
-- **Latency offset**: `AudioEngine.setOffsets(id, {latencyOffsetMs})` reschedules only that track; the API already stores `latency_offset_ms` (PATCH `/api/tracks/:id`, +-600000 ms). The M2-08 slider only needs UI + PATCH.
-- **Stores**: transport (`transportStore.ts`, written per frame: use selectors or a store subscription), mixer (`mixerStore.ts`, persisted per project by `useMixPersistence`), view (`timeline/viewStore.ts`).
-- **Shortcuts**: `audio/shortcuts.ts` is a pure function; add `R` (record/stop) and `M` (mic mute) there, keeping the "ignored while typing" rule.
-- **Test tools**: `audio/fake.ts` (fake AudioContext), `fake-indexeddb` is already used in the spike (add it to `apps/web` for the draft store).
+Mic setup and permission errors, input picker, headphone hint → AudioWorklet capture on the playback clock → chunks to IndexedDB every ~1 s → live lane and level meter (also as an input check before recording) → FLAC/WAV encode in a worker → dashed Draft lanes with mix, rename, discard → live latency offset (±1000 ms) with a 4 s loop preview → upload as a `recording` track (with `latencyOffsetMs`) → `R`/`M` shortcuts, mic mute, "Leave site?" guard, crash recovery of cut-short takes. API change: `upload-url` accepts `latencyOffsetMs`.
 
-## 4. Open items from the audits (fix or consciously defer)
+Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in `spike/probe/`): `m2-record-smoke.mjs` 24/24 (record over a track, live lane painted, mute, stop, real FLAC worker, draft, latency, upload, server row has FLAC + `latencyOffsetMs -50`, crash recovery), `m2-take-length.mjs` (60 s take = 59 996 ms), `m2-encode-worker.mjs` (built worker in Chromium/Firefox/WebKit, 4 min take encodes in 0.5-0.7 s, FLAC decodes).
 
-Highest value first. None block starting M2, but the first two touch code M2 will use.
+## 4. What is verified, what is not, and honest limits
+
+- The user ran the M2-11 checklist on **desktop** and reported it all fine (devices not itemised, so only desktop-settled criteria were ticked). The checklist stays in `tasks/M2.md` if a re-run is wanted.
+- **iPhone is out of scope for now (user decision, 2026-09-28).** The iPhone criteria in `tasks/M2.md` are marked deferred, not passed; M3/M4 must not assume they were verified. Note that testing on a phone would need HTTPS and phone-reachable storage URLs (dev presigned URLs point at `localhost:9000`); that comes with M3's deploy.
+- Still open and wanted: Bluetooth delay numbers for the README "Known issues"; desktop Safari and Android Chrome record → upload → play.
+- Never verified on real hardware: mic capture on iPhone/desktop Safari, iPhone CPU while recording with the live waveform, iPhone FLAC encode time (desktop is under a second), a screen lock or app switch mid-take, real Safari playback of the encoded FLAC.
+- Known gaps, by choice: drafts have no label editor (labels are set on the uploaded track); a lost response after a successful confirm could create a duplicate track on retry; only ready drafts get lanes (recording/encoding show in the live lane and `EncodeStatus`).
+- mp3/m4a decoding was never tested per browser even though uploads accept them.
+- FLAC encoder choice: `libflacjs` asm.js was chosen after a comparison with Mediabunny WASM in three headless desktop engines (`spike/SPIKE_NOTES.md`); iPhone timing was never measured.
+- Chromium's fake microphone reports two channels even when one is requested; the recorder reads channel 0 of a mono worklet input, so takes are mono regardless. Real microphones are untested.
+- Another session may be working on M0 follow-ups (the `m0-completion` worktree, `spike/`). Run `git status` first and do not overwrite or revert changes you did not make.
+
+## 5. Open items from the earlier audits (not touched in M2; fix or consciously defer)
 
 1. **Loop leaks between projects**: `useProjectAudio` cleanup never calls `clearLoop()`; engine and transport store are singletons, so a loop set in one project stays live in the next. Add a regression test.
-2. **Play at the very end** starts and stops immediately (`pausedPlayhead == duration`). Decide: rewind to 0 on Play.
+2. **Play at the very end** starts and stops immediately (`pausedPlayhead == duration`). Decide: rewind to 0 on Play (but not when recording starts: `play()` is called after `beginRecording`).
 3. **Project load error**: a non-404 failure leaves `ProjectPage` on "Loading…" (only a toast). Add an error state with Retry.
 4. **API logger is off** (`logger: false` in `app.ts`), so failed storage deletes are silent. Enable at least error logging before M3's cleanup relies on them.
-5. **Loop scheduler timer** (`engine.ts`, 40 ms `setInterval`, 250 ms lookahead) may be throttled in hidden tabs.
+5. **Loop scheduler timer** (`engine.ts`, 40 ms `setInterval`, 250 ms lookahead) may be throttled in hidden tabs. Related for M2: a take running in a hidden tab has not been tried.
 6. Untested spots: `server.ts` bad-env exit, `installGestureUnlock`, track-order transaction atomicity, boundaries 600000 ms and 30-char label.
 7. Doc drift: `.env.example` line 12 still says MinIO; `PUBLIC_ORIGIN` is validated but unused (dead until M3); a stale comment in `mixerStore.ts`; the README states "no gap at the wrap" as fact, but it was only shown on a fake clock and in one headless Chromium run.
 
-## 5. What only the user can do (real devices), and honest limits
-
-- **Never verified on real hardware:** mic capture on iPhone Safari (the make-or-break item for recording), desktop Safari, Bluetooth latency, anything audible (sync, flams, glitches), iPhone memory with 10 tracks, iPhone FLAC encode time. The M0 checklist is at the bottom of `spike/SPIKE_NOTES.md`.
-- **mp3/m4a decoding was never tested per browser** even though uploads accept them.
-- A headless Chromium fake-mic run now completed outside the sandbox: recording at a 5 s playhead produced a 60.018 s take (within the ±50 ms AC), and a tab killed after 30 s offered a recovered 30.0 s take whose transport advanced. The fake input reported two channels despite requesting one. Real hardware and listening checks remain necessary; see `spike/SPIKE_NOTES.md`.
-- The user may have another session working on M0 follow-ups in the same working tree (uncommitted edits to `spike/SPIKE_NOTES.md`, `spike/probe/run-drift.sh`, `spike/src/wave.ts` and a line in `CLAUDE.md` existed when this was written). Run `git status` first and do not overwrite or revert changes you did not make.
-
 ## 6. Environment gotchas (each one cost time)
 
-- **Ports**: web 5173, API 3100, Postgres 5433, S3 9000. Ports 3000 and 5432 are used by the user's other containers: do not stop those.
-- **MinIO is gone** (images no longer pullable): the S3 stand-in is RustFS (`docker-compose.dev.yml`). Start the stack with `docker compose -f docker-compose.dev.yml up -d`, then `pnpm db:migrate`, then `pnpm dev`. API tests need Postgres and S3 running.
-- **TypeScript 7 + Biome** (typescript-eslint doesn't support TS 7). `biome migrate` once rewrote `recommended: true` to `preset: none` (all rules off): check with a deliberately bad file if you touch `biome.json`.
-- **zsh**: `"$i:latest"` lowercases (`:l`), and unquoted `pkg@workspace:*` globs. Quote and use `${i}`.
-- **Shell tool**: large commands and heredocs were intermittently refused by the permission classifier ("no verdict"). Write big files with the Write/Edit tools and keep Bash commands short.
-- **Never wait without a timeout.** A background wait once hung for an hour because it waited for a file that would never appear.
-- **Playwright** (in `spike/`) is pinned to 1.58 to match the browsers cached on this machine. Throwaway probes live in `spike/probe/` (`m1-exit-smoke.mjs` drives the whole M1 flow against the dev stack); they need `pnpm dev` running and test tone files (generate with Python's `wave` module).
-- **Tests**: jsdom has no `<dialog>` modal (emulated in `apps/web/src/test/setup.ts`), which also clears `localStorage` before every test (the mix is remembered per project and would leak).
+- **Ports**: web 5173 (something else on this machine often holds it, so Vite silently moves to 5174/5175: read the `pnpm dev` output and pass `BASE` to probes), API 3100, Postgres 5433, S3 9000. Ports 3000 and 5432 are used by the user's other containers: do not stop those, and do not kill whatever holds 5173.
+- **Docker stack can be down** between sessions (`ECONNREFUSED ::1:5433` in API tests): `docker compose -f docker-compose.dev.yml up -d`, then `pnpm db:migrate` before `pnpm dev`. RustFS replaced MinIO.
+- **Headless Chromium's fake microphone works now** (`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`, page on `http://localhost`): the M0 note that it never resolved no longer holds. Press keys only after the page has mounted (wait for the Record button), or the shortcut listener is not attached yet.
+- **Shell tool**: the permission classifier intermittently returns "no verdict", mostly for big or multi-file commands and heredocs, sometimes for tiny ones. Write files with Write/Edit, keep Bash commands short, retry once, and continue with non-Bash work meanwhile. macOS has no `timeout` command: use the Bash tool's `timeout`. zsh: unmatched globs are errors (`--include=*.ts` fails: quote it), `sed -i ''` needs the empty string.
+- **TypeScript 7 + Biome**: `biome check --write` must cover `apps packages` (it only fixed what it was given). `biome migrate` once rewrote `recommended: true` to `preset: none`; check with a deliberately bad file if you touch `biome.json`. Biome flags `role="meter"` on a div (use `<meter>`), assignments inside expressions, and forEach callbacks that return.
+- **Tests**: jsdom has no `<dialog>` modal (emulated in `apps/web/src/test/setup.ts`, which now tolerates the node environment). `fake-indexeddb` drops jsdom's `Blob` on read-back (seed with `node:buffer`'s `Blob`) and its timers clash with fake timers (fake only `setInterval`). The FLAC test needs `// @vitest-environment node`. Entering a project restores its remembered mix, so set mix state in a test *after* the page has loaded. `getDraftStore()` is cached at module level: call `resetDraftStoreForTests()` per test.
 - **CI**: `.github/workflows/ci.yml` runs lint, typecheck and test with Postgres and RustFS as services; ~1 minute.
-- `spike/` is throwaway and outside the pnpm workspace (own lockfile). Delete it only after M2 has ported what it needs.
+- `spike/` is throwaway and outside the pnpm workspace (own lockfile). It still holds the M0 code that M2 ported; delete it only when the user says so.
 
-## 7. Suggested first steps for the M2 session
+## 7. Suggested first steps for the next session
 
-1. `git status`, `git pull`, read `CLAUDE.md`, this file, `tasks/M2.md`, PRD section 5.6 and `spike/SPIKE_NOTES.md`.
-2. Branch `m2-recording`. Optionally do audit items 1-3 first as small commits (they touch `useProjectAudio` and `ProjectPage`, which recording will extend).
-3. Start with M2-01 (mic setup, device picker, headphone hint). Ask the user for an iPhone/Safari mic check early: it decides whether the whole approach holds.
-4. Keep every task's manual checks written down (what to press, what to expect) so the user can run them quickly.
+1. `git status`, read `CLAUDE.md`, this file. Check PR #3 (`gh pr view 3`): if it is merged, `git checkout main && git pull` and start a new branch; if not, the user merges it (`main` is protected and the user has not asked for anyone else to merge).
+2. If the user brings Bluetooth numbers or Safari/Android results: add them to the README "Known issues" and tick the matching boxes in `tasks/M2.md`.
+3. Consider the audit items in section 5, in order, as small commits before or at the start of M3 (start with the loop leak and Play-at-end: both touch code recording uses). M3 needs the Playwright suite covering the M1 and M2 flows: `spike/probe/m2-record-smoke.mjs` is a good starting script for the recording flow.

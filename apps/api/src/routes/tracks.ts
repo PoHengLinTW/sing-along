@@ -54,6 +54,7 @@ export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
           name: input.name,
           performer: input.performer,
           startOffsetMs: input.startOffsetMs,
+          latencyOffsetMs: input.latencyOffsetMs,
           durationMs: input.durationMs,
           mimeType: contentType,
           sizeBytes: input.sizeBytes,

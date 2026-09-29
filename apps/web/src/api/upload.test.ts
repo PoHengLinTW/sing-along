@@ -126,7 +126,7 @@ describe('uploadTrack', () => {
     const put = vi.fn(
       async (
         _u: string,
-        _f: File,
+        _f: Blob,
         _h: Record<string, string>,
         _p: (f: number) => void,
         signal?: AbortSignal,

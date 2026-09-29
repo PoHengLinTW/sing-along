@@ -60,3 +60,13 @@ export function positionAt(segments: Segment[], now: number): number {
   }
   return current.from + Math.max(0, now - current.ctxStart);
 }
+
+/**
+ * A 4 s window around the playhead for judging alignment by ear: centred where it can be, slid
+ * to stay inside [0, duration], and never shorter than the 0.5 s loop minimum.
+ */
+export function previewWindow(position: number, duration: number, spanSec = 4): LoopRegion {
+  const length = Math.min(spanSec, duration);
+  const a = Math.max(0, Math.min(position - spanSec / 2, duration - length));
+  return { a, b: Math.max(a + length, a + MIN_LOOP_SEC) };
+}

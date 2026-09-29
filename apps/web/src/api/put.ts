@@ -1,7 +1,7 @@
-/** PUT a file to a presigned URL. XHR, not fetch: only XHR reports upload progress. */
+/** PUT a file (or any Blob, such as a recorded take) to a presigned URL. XHR, not fetch: only XHR reports upload progress. */
 export function putWithProgress(
   url: string,
-  file: File,
+  file: Blob,
   headers: Record<string, string>,
   onProgress: (fraction: number) => void,
   signal?: AbortSignal,

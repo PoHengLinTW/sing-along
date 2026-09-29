@@ -13,7 +13,7 @@ anything. Don't put it anywhere you wouldn't want that.
 |---|---|
 | M0 Audio spike | Done, apart from manual device checks (`spike/SPIKE_NOTES.md`) |
 | M1 Core player | **Implemented** (this is what runs today) |
-| M2 Recording | Not started |
+| M2 Recording | **Implemented**, waiting for the manual device pass (M2-11 in `tasks/M2.md`) |
 | M3 Hardening and deploy | Not started |
 | M4 PWA and mobile | Not started |
 
@@ -29,6 +29,34 @@ anything. Don't put it anywhere you wouldn't want that.
 - Zoom (buttons or Ctrl/Cmd + scroll), auto-follow of the playhead, click or drag to seek.
 - Labels (Soprano, Alto, Bass, ... or your own) with colored chips, a filter, and "mute all Alto".
 - Your mix and zoom are remembered **in this browser only** and never sent to the server.
+
+### Recording (M2)
+
+- **Record** (or press `R`) starts a take at the playhead while the other tracks play. Use
+  headphones: the microphone is opened with echo cancellation, noise suppression and automatic
+  gain **off**, so speaker sound would leak into the take. Pick the input and check its level with
+  "Check input level" first; the meter warns when the signal clips. `M` mutes the microphone (the
+  take keeps its length, the muted part is silent).
+- The take is written to your browser's storage **while you record**, so a crash or a closed tab
+  does not lose it: reload the project and the take comes back as a draft. Closing the tab
+  mid-take asks for confirmation.
+- On Stop the take is encoded to FLAC (WAV if the encoder can't load) and appears as a dashed
+  **Draft** lane below the tracks. It exists only in this browser until you press **Upload**.
+  Drafts play with the mix, can be renamed and discarded.
+- Every track and draft has a **latency offset** (±1000 ms). Drag the slider, nudge with the arrow
+  keys (Shift = 10 ms) or type a value; "↻ 4 s" loops the 4 seconds around the playhead so you can
+  judge the alignment by ear. Align a take once and it stays aligned for everyone.
+- Recording stops by itself at 10 minutes.
+
+### Known issues
+
+- **Bluetooth headphones add a delay** (often 100-300 ms and it can drift), so a take recorded
+  while wearing them arrives late. Use the latency offset to line it up, or use wired headphones.
+  Recording has not been checked on real Bluetooth hardware yet.
+- The microphone only works on `https://` pages and on `localhost`. Opening the dev server from
+  another device over plain `http://<lan-ip>` will not get microphone access.
+- Recording has been exercised end to end in Chromium with a fake microphone; a real microphone on
+  iPhone Safari and desktop Safari is still to be checked (see `tasks/M2.md`, M2-11).
 
 ## How it fits together
 
@@ -57,7 +85,7 @@ then calls `POST /api/tracks/:id/confirm` (the API checks the object and marks t
 - **Node 22** (see `.nvmrc`) and **pnpm 10** (`corepack enable` picks the version from
   `package.json`).
 - **Docker**, for a local PostgreSQL and an S3-compatible store.
-- A modern desktop browser (Chrome, Safari, Firefox). Microphone features (M2) will need HTTPS.
+- A modern desktop browser (Chrome, Safari, Firefox). The microphone needs `localhost` or HTTPS.
 
 ## Run it locally
 
@@ -134,6 +162,11 @@ before it can merge.
   (`docker compose -f docker-compose.dev.yml ps`); the compose file allows the dev origin.
 - **API tests can't connect**: start the compose stack, or set `TEST_DATABASE_URL`.
 - **No sound**: browsers keep audio suspended until you click or press a key on the page.
+- **Vite says "Port 5173 is in use, trying another one"**: it moved to the next free port (see the
+  `pnpm dev` output). Nothing else needs changing: the API is reached through Vite's proxy and the
+  dev storage accepts any origin.
+- **Record says the microphone is blocked**: allow the microphone for the site in the browser's
+  site settings (the lock icon by the address), then press Record again.
 
 ## Project documents
 

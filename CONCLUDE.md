@@ -324,3 +324,17 @@ Details and numbers: `spike/SPIKE_NOTES.md`.
 - **Track order / labels** are saved through explicit endpoints; the order request needs the full id list, saved optimistically with rollback and a toast.
 - **Bad uploads:** confirm deletes both the object and the pending row when the object is missing or its size differs.
 - **Verified in a real browser** (throwaway Playwright probes in `spike/probe/`, headless Chromium against the dev stack): create project, upload three labelled tracks, play in sync, mix, seek, loop wrap, reload restores the mix, deletes ask for confirmation, no console errors. Audible checks and Safari/iPhone are still manual.
+
+---
+
+## Q21: M2 implementation decisions
+
+**Decision (details are in each task's commit message):**
+- **Recording pipeline:** mic (raw constraints, chosen device) → AudioWorklet on the *playback* AudioContext → ~1 s chunks written to IndexedDB while recording → on Stop a worker encodes FLAC 16-bit mono (WAV fallback) → the draft holds the encoded blob, peaks and duration, and the raw chunks are deleted only after that is saved. A crash at any point leaves a recoverable draft; reload finishes interrupted takes.
+- **Placement:** the mic opens first, then playback starts; a take's position is the timeline time of its *first captured frame* (pure function over the engine's scheduled passes, unclamped), so the mic-open delay never shifts it. Frames that fall before timeline 0 are trimmed when encoding.
+- **Drafts in the engine** use a stable negative id derived from the draft UUID, so the engine, mixer and mix persistence treat them like tracks and a draft keeps its mix across reloads. Uploading moves that mix to the new track id.
+- **Latency offset** is edited live through a pending-offsets store (so the waveform and engine move at once) and saved after 500 ms of quiet: PATCH for tracks, IndexedDB for drafts. A failed save reverts.
+- **API change:** `POST /projects/:id/tracks/upload-url` accepts an optional `latencyOffsetMs` (default 0, ±600000 like PATCH), so a recorded take arrives already aligned. Rejected: a follow-up PATCH, which leaves a window where the take is misaligned for other listeners.
+- **Upload of a draft** reuses the normal `upload-url → PUT → confirm` pipeline with `source = recording`; the local draft is deleted only after the server confirmed, so a failure or a reload mid-upload can simply be retried (a lost *response* after a successful confirm could create a duplicate track: accepted, the user can delete it).
+- **Labels for a draft** are sent if the draft has them, but there is no label editor on drafts yet: assign labels on the uploaded track. Follow-up if wanted.
+- **Not verifiable without hardware** (left open in `tasks/M2.md`): real microphone capture on iPhone and desktop Safari, CPU headroom while recording on iPhone, iPhone encode time, audible alignment. The built encoder worker was verified in Playwright's Chromium, Firefox and WebKit.

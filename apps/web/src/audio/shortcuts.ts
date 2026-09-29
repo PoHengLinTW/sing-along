@@ -26,6 +26,20 @@ const KEYS: Record<string, TransportShortcut> = {
   ArrowRight: 'forward',
 };
 
+export type RecordShortcut = 'record' | 'mic-mute';
+
+const RECORD_KEYS: Record<string, RecordShortcut> = { r: 'record', m: 'mic-mute' };
+
+/**
+ * R starts/stops a take, M mutes the microphone. Ignored while typing and with Ctrl/Cmd/Alt
+ * (Ctrl+R reloads the page, Cmd+M minimises the window).
+ */
+export function recordShortcut(e: KeyLike): RecordShortcut | null {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  if (isTypingTarget(e.target)) return null;
+  return RECORD_KEYS[e.key.toLowerCase()] ?? null;
+}
+
 /** Maps a keydown to a transport action, or null when it should be left alone. */
 export function transportShortcut(e: KeyLike): TransportShortcut | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null; // browser / OS shortcuts

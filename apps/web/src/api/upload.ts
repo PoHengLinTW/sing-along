@@ -17,7 +17,7 @@ export interface UploadDeps {
   /** PUT the file straight to storage; reports progress as a 0..1 fraction. */
   put: (
     url: string,
-    file: File,
+    file: Blob,
     headers: Record<string, string>,
     onProgress: (fraction: number) => void,
     signal?: AbortSignal,
@@ -32,10 +32,53 @@ export interface UploadParams {
   signal?: AbortSignal;
 }
 
+export interface PreparedUpload {
+  projectId: number;
+  blob: Blob;
+  mimeType: string;
+  durationMs: number;
+  peaks: number[];
+  startOffsetMs: number;
+  latencyOffsetMs: number;
+  source: 'upload' | 'recording';
+  form: { name: string; performer: string; labelIds: number[] };
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+}
+
 /**
- * upload-url -> PUT to storage -> confirm. Audio goes browser -> storage directly.
+ * upload-url -> PUT to storage -> confirm, for audio whose metadata is already known (a recorded
+ * take has its peaks and duration from the encoder). Audio goes browser -> storage directly.
  * Cancelling aborts the PUT; the pending track is left for the M3 cleanup.
  */
+export async function uploadPrepared(
+  deps: Pick<UploadDeps, 'apiFetch' | 'put'>,
+  p: PreparedUpload,
+): Promise<TrackDto> {
+  const body: UploadUrlRequest = {
+    name: p.form.name,
+    performer: p.form.performer,
+    labels: p.form.labelIds,
+    mimeType: p.mimeType,
+    sizeBytes: p.blob.size,
+    durationMs: p.durationMs,
+    startOffsetMs: p.startOffsetMs,
+    latencyOffsetMs: p.latencyOffsetMs,
+    source: p.source,
+    peaks: p.peaks,
+  };
+  const target = await deps.apiFetch<UploadUrlResponse>(
+    `/api/projects/${p.projectId}/tracks/upload-url`,
+    { method: 'POST', body, signal: p.signal },
+  );
+  await deps.put(target.uploadUrl, p.blob, target.headers, p.onProgress ?? (() => {}), p.signal);
+  return deps.apiFetch<TrackDto>(`/api/tracks/${target.trackId}/confirm`, {
+    method: 'POST',
+    signal: p.signal,
+  });
+}
+
+/** Upload a file from disk: decode it for its peaks and duration, then `uploadPrepared`. */
 export async function uploadTrack(deps: UploadDeps, p: UploadParams): Promise<TrackDto> {
   const mimeType = resolveAudioMime(p.file);
   if (!mimeType) throw new Error('Unsupported format.');
@@ -47,28 +90,17 @@ export async function uploadTrack(deps: UploadDeps, p: UploadParams): Promise<Tr
     throw new Error('This file could not be read as audio.');
   }
 
-  const body: UploadUrlRequest = {
-    name: p.form.name,
-    performer: p.form.performer,
-    labels: p.form.labelIds,
+  return uploadPrepared(deps, {
+    projectId: p.projectId,
+    blob: p.file,
     mimeType,
-    sizeBytes: p.file.size,
     durationMs: Math.round(audio.durationSec * 1000),
-    startOffsetMs: 0,
-    source: 'upload',
     peaks: computePeaks(audio.channels, audio.sampleRate, PEAKS_PER_SEC),
-  };
-  const target = await deps.apiFetch<UploadUrlResponse>(
-    `/api/projects/${p.projectId}/tracks/upload-url`,
-    {
-      method: 'POST',
-      body,
-      signal: p.signal,
-    },
-  );
-  await deps.put(target.uploadUrl, p.file, target.headers, p.onProgress ?? (() => {}), p.signal);
-  return deps.apiFetch<TrackDto>(`/api/tracks/${target.trackId}/confirm`, {
-    method: 'POST',
+    startOffsetMs: 0,
+    latencyOffsetMs: 0,
+    source: 'upload',
+    form: p.form,
+    onProgress: p.onProgress,
     signal: p.signal,
   });
 }

@@ -1,22 +1,29 @@
 import type { TrackDto } from '@sing-along/shared';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 import type { StoreApi } from 'zustand/vanilla';
 import { type AudioController, getAudioController } from '../audio/controller';
 import { adjustEdge, type LoopRegion } from '../audio/loop';
+import type { DraftView } from '../audio/recorder/draftView';
+import { type LiveWave, liveWave } from '../audio/recorder/liveWave';
+import { type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { waveformColor } from '../lib/labels';
 import { followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
+import { RecordingLane } from './RecordingLane';
 import { type ViewState, viewStore } from './viewStore';
 import { Waveform } from './Waveform';
 
 interface Props {
   tracks: TrackDto[];
+  drafts?: DraftView[];
   controller?: Pick<AudioController, 'seek' | 'setLoopRegion' | 'adjustLoopEdge'>;
   transport?: StoreApi<TransportState>;
   view?: StoreApi<ViewState>;
   status?: StoreApi<StatusState>;
+  live?: LiveWave;
+  recording?: StoreApi<RecordingState>;
 }
 
 type Gesture =
@@ -27,7 +34,7 @@ type Gesture =
 /** Pointer movement under this many px is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 
-export const LANE_HEIGHT = 136;
+export const LANE_HEIGHT = 168;
 export const LANE_MARGIN = 2;
 /** Height of the ruler including its border: the track panel column starts below it. */
 export const RULER_HEIGHT = 25;
@@ -35,10 +42,13 @@ const ZOOM_STEP = 1.25;
 
 export function Timeline({
   tracks,
+  drafts = [],
   controller,
   transport = transportStore,
   view = viewStore,
   status = trackStatusStore,
+  live = liveWave,
+  recording = recordingStore,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -56,8 +66,18 @@ export function Timeline({
   const programmatic = useRef<number | null>(null); // scrollLeft we set ourselves
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
 
+  const isRecording = useStore(recording, (s) => s.status === 'recording');
+  // Whole seconds only: this re-renders once a second while a take grows, not on every block.
+  const liveEndSec = useSyncExternalStore(
+    (fn) => live.subscribe(fn),
+    () => Math.ceil(live.endSec),
+  );
+  const showLiveLane = isRecording && live.timed;
+
   const contentSec = Math.max(
     transportDuration,
+    showLiveLane ? liveEndSec + 1 : 0,
+    ...drafts.map((d) => (d.startOffsetMs + d.latencyOffsetMs + d.durationMs) / 1000),
     ...tracks.map((t) => (t.startOffsetMs + t.latencyOffsetMs + t.durationMs) / 1000),
   );
   const contentPx = secToPx(contentSec, pxPerSec);
@@ -235,6 +255,24 @@ export function Timeline({
           {tracks.map((track) => (
             <Lane key={track.id} track={track} pxPerSec={pxPerSec} status={status} />
           ))}
+          {drafts.map((d) => (
+            <DraftLane key={d.id} draft={d} pxPerSec={pxPerSec} status={status} />
+          ))}
+          {showLiveLane && (
+            <div
+              className="recording-lane"
+              data-testid="lane-recording"
+              style={{ height: `${LANE_HEIGHT}px` }}
+            >
+              <RecordingLane
+                wave={live}
+                pxPerSec={pxPerSec}
+                scroller={scroller}
+                height={LANE_HEIGHT}
+                color="#e11d48"
+              />
+            </div>
+          )}
           {region && (
             <div
               className="loop-region"
@@ -292,6 +330,41 @@ function Lane({
       {state !== 'ready' && (
         <div role="status" className="lane-status">
           {state === 'error' ? "Couldn't load audio" : 'Loading audio…'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DraftLane({
+  draft,
+  pxPerSec,
+  status,
+}: {
+  draft: DraftView;
+  pxPerSec: number;
+  status: StoreApi<StatusState>;
+}) {
+  const state = useStore(status, (s) => s.byId[draft.engineId]);
+  const left = secToPx((draft.startOffsetMs + draft.latencyOffsetMs) / 1000, pxPerSec);
+  const width = secToPx(draft.durationMs / 1000, pxPerSec);
+  return (
+    <div
+      className="lane draft-lane"
+      data-testid={`lane-draft-${draft.id}`}
+      style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
+    >
+      <Waveform
+        peaks={draft.peaks}
+        durationSec={draft.durationMs / 1000}
+        pxPerSec={pxPerSec}
+        color="#64748b"
+        height={LANE_HEIGHT}
+      />
+      <span className="draft-badge lane-badge">Draft</span>
+      {state === 'error' && (
+        <div role="status" className="lane-status">
+          Couldn't load audio
         </div>
       )}
     </div>

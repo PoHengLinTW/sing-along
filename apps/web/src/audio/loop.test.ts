@@ -6,6 +6,7 @@ import {
   makeLoop,
   nextSegmentStart,
   positionAt,
+  previewWindow,
 } from './loop';
 
 describe('makeLoop', () => {
@@ -79,5 +80,29 @@ describe('positionAt', () => {
   });
   it('is 0 without segments', () => {
     expect(positionAt([], 5)).toBe(0);
+  });
+});
+
+describe('previewWindow', () => {
+  it('is 4 s centred on the playhead', () => {
+    expect(previewWindow(10, 60)).toEqual({ a: 8, b: 12 });
+  });
+
+  it('keeps 4 s when the playhead is near the start', () => {
+    expect(previewWindow(1, 60)).toEqual({ a: 0, b: 4 });
+    expect(previewWindow(0, 60)).toEqual({ a: 0, b: 4 });
+  });
+
+  it('keeps 4 s when the playhead is near the end', () => {
+    expect(previewWindow(59, 60)).toEqual({ a: 56, b: 60 });
+  });
+
+  it('uses the whole project when it is shorter than 4 s', () => {
+    expect(previewWindow(1, 3)).toEqual({ a: 0, b: 3 });
+  });
+
+  it('never returns a region under the 0.5 s loop minimum', () => {
+    const w = previewWindow(0, 0.2);
+    expect(w.b - w.a).toBeGreaterThanOrEqual(0.5);
   });
 });

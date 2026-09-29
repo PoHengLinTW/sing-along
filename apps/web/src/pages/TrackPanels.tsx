@@ -1,28 +1,45 @@
 import type { ProjectDetail, TrackDto } from '@sing-along/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { useStore } from 'zustand';
 import { apiFetch } from '../api/client';
-import { mixerStore, useMix } from '../audio/mixerStore';
+import { getAudioController } from '../audio/controller';
+import { mixerStore } from '../audio/mixerStore';
+import type { DraftView } from '../audio/recorder/draftView';
+import { recordingStore } from '../audio/recorder/recordingStore';
 import { moveBefore, moveByOffset } from '../lib/reorder';
 import { LANE_HEIGHT, LANE_MARGIN, RULER_HEIGHT } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
 import { LabelChip } from '../ui/LabelChip';
+import { DraftPanel } from './DraftPanel';
 import { LabelEditor } from './LabelEditor';
+import { LatencyControl } from './LatencyControl';
+import { MixControls } from './MixControls';
 
 export function TrackPanels({
   project,
   visible,
   reorderDisabled,
+  drafts = [],
+  onTrackLatency,
+  onDraftLatency,
+  onDraftUpload,
 }: {
   project: ProjectDetail;
   /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
   visible: TrackDto[];
   reorderDisabled: boolean;
+  /** Takes not uploaded yet: listed below the uploaded tracks. */
+  drafts?: DraftView[];
+  onTrackLatency?: (track: TrackDto, ms: number) => void;
+  onDraftLatency?: (draft: DraftView, ms: number) => void;
+  onDraftUpload?: (draft: DraftView, onProgress: (fraction: number) => void) => Promise<void>;
 }) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
   const dragId = useRef<number | null>(null);
+  const isRecording = useStore(recordingStore, (s) => s.status === 'recording');
 
   const patchTrack = (id: number, updated: TrackDto) =>
     qc.setQueryData<ProjectDetail>(key, (old) =>
@@ -75,6 +92,7 @@ export function TrackPanels({
           projectKey={key}
           reorderDisabled={reorderDisabled}
           onSaved={(updated) => patchTrack(track.id, updated)}
+          onLatency={(ms) => onTrackLatency?.(track, ms)}
           onDragStart={() => {
             dragId.current = track.id;
           }}
@@ -85,6 +103,23 @@ export function TrackPanels({
           onMove={(offset) => applyOrder(moveByOffset(ids, track.id, offset))}
         />
       ))}
+      {drafts.map((d) => (
+        <DraftPanel
+          key={d.id}
+          draft={d}
+          onLatency={(ms) => onDraftLatency?.(d, ms)}
+          onUpload={onDraftUpload}
+        />
+      ))}
+      {isRecording && (
+        <div
+          className="track-panel recording-panel"
+          data-testid="panel-recording"
+          style={{ height: LANE_HEIGHT, margin: `${LANE_MARGIN}px 0` }}
+        >
+          <strong>● Recording…</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -94,6 +129,7 @@ interface PanelProps {
   reorderDisabled: boolean;
   projectKey: (string | number)[];
   onSaved: (updated: TrackDto) => void;
+  onLatency: (ms: number) => void;
   onDragStart: () => void;
   onDrop: () => void;
   onMove: (offset: -1 | 1) => void;
@@ -104,12 +140,12 @@ function TrackPanel({
   projectKey,
   reorderDisabled,
   onSaved,
+  onLatency,
   onDragStart,
   onDrop,
   onMove,
 }: PanelProps) {
   const qc = useQueryClient();
-  const mix = useMix(track.id);
   const [confirming, setConfirming] = useState(false);
   const [editingLabels, setEditingLabels] = useState(false);
 
@@ -199,31 +235,7 @@ function TrackPanel({
           ＋
         </button>
       </div>
-      <div className="panel-mix">
-        <input
-          type="range"
-          aria-label="Volume"
-          min={0}
-          max={150}
-          step={1}
-          value={Math.round(mix.volume * 100)}
-          onChange={(e) => mixerStore.getState().setVolume(track.id, Number(e.target.value) / 100)}
-        />
-        <span className="vol-readout">{Math.round(mix.volume * 100)}%</span>
-        <button
-          type="button"
-          aria-pressed={mix.muted}
-          onClick={() => mixerStore.getState().toggleMute(track.id)}
-        >
-          Mute
-        </button>
-        <button
-          type="button"
-          aria-pressed={mix.solo}
-          onClick={() => mixerStore.getState().toggleSolo(track.id)}
-        >
-          Solo
-        </button>
+      <MixControls id={track.id}>
         <button
           type="button"
           className="danger"
@@ -232,7 +244,12 @@ function TrackPanel({
         >
           🗑
         </button>
-      </div>
+      </MixControls>
+      <LatencyControl
+        value={track.latencyOffsetMs}
+        onChange={onLatency}
+        onPreview={() => void getAudioController().previewAround()}
+      />
       <LabelEditor
         open={editingLabels}
         track={track}
