@@ -36,5 +36,5 @@ These were decided while writing the tasks and aren't in the PRD. Confirm or cha
 3. **Production runs as one app container:** Fastify serves the API *and* the built web assets (`@fastify/static`). The stack is then app + postgres + cloudflared, with no separate web server.
 4. **Recording while stopped** starts playback from the playhead and recording at the same moment. **Stop** ends the take and pauses playback.
 5. **Input device picker:** Users can choose their mic (e.g. a USB mic instead of the built-in one). Cheap to build and important for quality.
-6. **wavesurfer.js renders waveforms only.** Playback uses our own Web Audio engine, pending the M0-07 finding. The multitrack plugin plays through separate media elements, which risks drift between tracks.
+6. **wavesurfer.js renders waveforms only.** Playback uses our own Web Audio engine, confirmed by M0-07. The multitrack plugin plays through separate media elements and had 168.3 ms inter-track spread in a five-minute headless probe.
 7. **Track duration is reported by the client** (the server doesn't decode audio). This is accepted for a hobby app.

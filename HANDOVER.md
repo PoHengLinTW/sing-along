@@ -8,7 +8,7 @@ the code wins: fix this file.
 
 | Milestone | State |
 |---|---|
-| M0 spike (`spike/`) | Code done and unit-tested. **6 of 32 acceptance criteria ticked** in `tasks/M0.md`; the rest are real-device, listening or measurement items. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
+| M0 spike (`spike/`) | Work continues in the `m0-completion` worktree. **11 of 32 acceptance criteria ticked** in `tasks/M0.md`; real-device and listening checks remain. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
 | M1 core player | Implemented. **78 of 87 criteria ticked** in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. CI is green on `main`. |
 | M2 recording | **Not started. This is your job.** Tasks are in `tasks/M2.md` (M2-01 .. M2-11). |
 
@@ -27,7 +27,7 @@ Two independent audits (one per milestone) were run; their conclusions are folde
 
 ## 3. What M2 can build on (already in the repo)
 
-- **Spike code to port** (list also in `spike/SPIKE_NOTES.md`): `spike/src/capture/` (`recorder.worklet.ts`, `recorder.ts`, `take.ts`, `store.ts` with `TakeStore` + `ChunkWriter`), `spike/src/encode/` (`pcm.ts`, `flac.ts`, `encode.worker.ts`, `client.ts`), `spike/src/mic.ts`. They have tests; port the tests with them. FLAC: `libflacjs` asm.js build (chosen provisionally; only one encoder was actually benchmarked).
+- **Spike code to port** (list also in `spike/SPIKE_NOTES.md`): `spike/src/capture/` (`recorder.worklet.ts`, `recorder.ts`, `take.ts`, `store.ts` with `TakeStore` + `ChunkWriter`), `spike/src/encode/` (`pcm.ts`, `flac.ts`, `encode.worker.ts`, `client.ts`), `spike/src/mic.ts`. They have tests; port the tests with them. FLAC: `libflacjs` asm.js build (chosen provisionally after comparison with Mediabunny WASM in three headless desktop engines; iPhone timing remains open).
 - **Timeline math you need already exists** in `apps/web/src/audio/`: `loop.ts` has `positionAt(segments, ctxTime)`; the engine plays "segments" scheduled on the AudioContext clock (`engine.ts`). To place a take, map the first captured frame's `currentTime` onto the timeline with that, as the spike did with `timelineAt`, and trim samples that fall before timeline 0.
 - **Upload pipeline** is reusable: `apps/web/src/api/upload.ts` (`uploadTrack`, already supports `source: 'upload' | 'recording'` in the API; the client currently sends `'upload'`), `put.ts` (XHR with progress), `pages/UploadPanel.tsx`.
 - **Latency offset**: `AudioEngine.setOffsets(id, {latencyOffsetMs})` reschedules only that track; the API already stores `latency_offset_ms` (PATCH `/api/tracks/:id`, +-600000 ms). The M2-08 slider only needs UI + PATCH.
@@ -51,7 +51,7 @@ Highest value first. None block starting M2, but the first two touch code M2 wil
 
 - **Never verified on real hardware:** mic capture on iPhone Safari (the make-or-break item for recording), desktop Safari, Bluetooth latency, anything audible (sync, flams, glitches), iPhone memory with 10 tracks, iPhone FLAC encode time. The M0 checklist is at the bottom of `spike/SPIKE_NOTES.md`.
 - **mp3/m4a decoding was never tested per browser** even though uploads accept them.
-- Headless Chromium's fake mic **never resolved `getUserMedia`** in M0 (`--use-fake-device-for-media-stream` hung), so recording cannot be unit- or probe-tested end to end here. Plan M2's automated coverage around the parts that are pure or fakeable (worklet batching, chunk store, encoder, offset math) and give the user an explicit manual checklist per 📱 task.
+- A headless Chromium fake-mic run now completed outside the sandbox: recording at a 5 s playhead produced a 60.018 s take (within the ±50 ms AC), and a tab killed after 30 s offered a recovered 30.0 s take whose transport advanced. The fake input reported two channels despite requesting one. Real hardware and listening checks remain necessary; see `spike/SPIKE_NOTES.md`.
 - The user may have another session working on M0 follow-ups in the same working tree (uncommitted edits to `spike/SPIKE_NOTES.md`, `spike/probe/run-drift.sh`, `spike/src/wave.ts` and a line in `CLAUDE.md` existed when this was written). Run `git status` first and do not overwrite or revert changes you did not make.
 
 ## 6. Environment gotchas (each one cost time)
