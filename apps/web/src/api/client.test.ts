@@ -39,6 +39,13 @@ describe('apiFetch', () => {
     expect(err.fields).toEqual({ title: 'Title is required' });
   });
 
+  it('keeps the machine-readable code of a cap rejection', async () => {
+    mockFetch(async () => json(409, { message: 'Track limit reached (10).', code: 'TRACK_LIMIT' }));
+    const err = (await apiFetch('/api/x').catch((e) => e)) as ApiRequestError;
+    expect(err.code).toBe('TRACK_LIMIT');
+    expect(err.message).toBe('Track limit reached (10).');
+  });
+
   it('falls back to a generic message when the error body is not JSON', async () => {
     mockFetch(async () => new Response('<html>bad gateway</html>', { status: 502 }));
     const err = (await apiFetch('/api/x').catch((e) => e)) as ApiRequestError;

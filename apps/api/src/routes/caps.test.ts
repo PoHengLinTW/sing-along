@@ -125,6 +125,7 @@ describe('global storage cap', () => {
     const res = await upload({ sizeBytes: 5001 });
     expect(res.statusCode).toBe(507);
     expect(res.json().code).toBe('STORAGE_FULL');
+    expect(res.json().message).toBe('Storage full (10 KB) — delete old tracks or projects.');
   });
   it('counts pending sizes in the total', async () => {
     await seedTracks(1, { sizeBytes: 9000, status: 'pending' });

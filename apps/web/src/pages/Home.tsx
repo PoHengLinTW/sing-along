@@ -16,15 +16,27 @@ export function Home() {
   });
 
   const storage = useStorageUsage();
+  const atProjectLimit = !!storage.data && storage.data.projectCount >= storage.data.projectLimit;
+  const limitMessage = `Project limit reached (${storage.data?.projectLimit}). Delete a project to create another.`;
 
   return (
     <section>
       <div className="page-head">
         <h1>Projects</h1>
-        <button type="button" onClick={() => setCreating(true)}>
+        <button
+          type="button"
+          disabled={atProjectLimit}
+          aria-describedby={atProjectLimit ? 'project-limit' : undefined}
+          onClick={() => setCreating(true)}
+        >
           Create project
         </button>
       </div>
+      {atProjectLimit && (
+        <p id="project-limit" className="hint">
+          {limitMessage}
+        </p>
+      )}
 
       {storage.data && <StorageMeter usage={storage.data} />}
 
@@ -48,7 +60,7 @@ export function Home() {
       {query.data && query.data.length === 0 && (
         <div className="state-box">
           <p>No projects yet.</p>
-          <button type="button" onClick={() => setCreating(true)}>
+          <button type="button" disabled={atProjectLimit} onClick={() => setCreating(true)}>
             Create your first project
           </button>
         </div>

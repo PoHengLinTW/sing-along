@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiRequestError } from '../api/client';
 import type { DraftView } from '../audio/recorder/draftView';
 import { DraftPanel } from './DraftPanel';
 
@@ -52,6 +53,22 @@ describe('DraftPanel upload', () => {
     expect(button(/upload take 1/i).disabled).toBe(true);
     fireEvent.click(button(/upload take 1/i));
     expect(onUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the limit message when the project is full (recording is allowed, uploading is not)', async () => {
+    fireEvent.click(button(/upload take 1/i));
+    await act(async () =>
+      fail(
+        new ApiRequestError(
+          409,
+          'Track limit reached (10). Delete a track to add another.',
+          undefined,
+          'TRACK_LIMIT',
+        ),
+      ),
+    );
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Track limit reached \(10\)/);
+    expect(button(/retry/i)).toBeTruthy();
   });
 
   it('on failure keeps the take, says why, and offers Retry which uploads again', async () => {

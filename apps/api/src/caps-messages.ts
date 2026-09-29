@@ -30,7 +30,7 @@ export const trackLimit = (c: Caps) =>
 export const storageFull = (c: Caps) =>
   new HttpError(
     507,
-    `Storage full (${formatBytes(c.maxStorageBytes)}). Delete old tracks or projects.`,
+    `Storage full (${formatBytes(c.maxStorageBytes)}) — delete old tracks or projects.`,
     undefined,
     'STORAGE_FULL',
   );

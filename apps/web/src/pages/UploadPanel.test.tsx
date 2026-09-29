@@ -1,3 +1,4 @@
+import { DEFAULT_CAPS } from '@sing-along/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -51,7 +52,7 @@ function makeDeps(): UploadDeps {
   };
 }
 
-function setup() {
+function setup(props: { trackCount?: number; caps?: typeof DEFAULT_CAPS } = {}) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => json(200, labels)),
@@ -60,7 +61,7 @@ function setup() {
   render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <UploadPanel projectId={5} deps={makeDeps()} />
+        <UploadPanel projectId={5} deps={makeDeps()} {...props} />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -165,5 +166,76 @@ describe('UploadPanel', () => {
     puts[0]?.reject(new Error('Upload failed (403)'));
     const item = (await screen.findByText(/Upload failed \(403\)/)).closest('li') as HTMLElement;
     expect(within(item).getByRole('button', { name: 'Upload' })).toBeTruthy();
+  });
+});
+
+describe('UploadPanel caps (M3-03)', () => {
+  const sized = (name: string, size: number, type: string) => {
+    const f = new File([new Uint8Array(1)], name, { type });
+    Object.defineProperty(f, 'size', { value: size });
+    return f;
+  };
+
+  it('rejects a file over 60 MB on the client, naming the limit, without any API call', async () => {
+    setup();
+    await userEvent.upload(chooser(), sized('huge.flac', 61 * 1024 * 1024, 'audio/flac'));
+    expect(await screen.findByText(/huge\.flac: Too large \(limit 60 MB\)\./)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Upload' })).toBeNull();
+    expect(apiCalls).toEqual([]);
+  });
+
+  it('gives WAV files the convert hint', async () => {
+    setup();
+    await userEvent.upload(chooser(), sized('take.wav', 61 * 1024 * 1024, 'audio/wav'));
+    expect(await screen.findByText(/Convert to FLAC or MP3/)).toBeTruthy();
+  });
+
+  it('shows the too-long message when the decoded audio exceeds 10 minutes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(200, labels)),
+    );
+    const deps = makeDeps();
+    deps.decode = async () => ({
+      durationSec: 601,
+      sampleRate: 1,
+      channels: [new Float32Array(1)],
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <UploadPanel projectId={5} deps={deps} />
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+    await userEvent.upload(chooser(), flac());
+    await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
+    expect(await screen.findByText('Too long (limit 10 minutes).')).toBeTruthy();
+    expect(apiCalls).toEqual([]);
+  });
+
+  it('disables choosing files at the track limit, with an explanation', async () => {
+    setup({ trackCount: 10 });
+    expect(chooser().disabled).toBe(true);
+    expect(chooser().closest('label')?.getAttribute('title')).toBe('Track limit reached (10).');
+    expect(screen.getByText('Track limit reached (10).')).toBeTruthy();
+  });
+
+  it('stays enabled at 9 tracks', () => {
+    setup({ trackCount: 9 });
+    expect(chooser().disabled).toBe(false);
+    expect(screen.queryByText('Track limit reached (10).')).toBeNull();
+  });
+
+  it('ignores dropped files at the limit', () => {
+    setup({ trackCount: 10 });
+    fireEvent.drop(screen.getByTestId('drop-zone'), { dataTransfer: { files: [flac()] } });
+    expect(screen.queryByRole('button', { name: 'Upload' })).toBeNull();
+  });
+
+  it('uses the live limit from the server', () => {
+    setup({ trackCount: 4, caps: { ...DEFAULT_CAPS, maxTracksPerProject: 4 } });
+    expect(chooser().disabled).toBe(true);
+    expect(screen.getByText('Track limit reached (4).')).toBeTruthy();
   });
 });

@@ -5,7 +5,7 @@ import { ToastProvider, useToast } from './ui/toast';
 
 declare module '@tanstack/react-query' {
   interface Register {
-    queryMeta: { handles404?: boolean };
+    queryMeta: { handles404?: boolean; silent?: boolean };
   }
 }
 
@@ -18,6 +18,7 @@ function QueryBridge({ children }: { children: ReactNode }) {
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
       queryCache: new QueryCache({
         onError: (err, query) => {
+          if (query.meta?.silent) return; // informational queries (storage meter) fail quietly
           // Pages that render their own "not found" state opt out of the toast.
           if (err instanceof ApiRequestError && err.status === 404 && query.meta?.handles404)
             return;

@@ -17,6 +17,7 @@ import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
+import { useCaps } from '../lib/useStorageUsage';
 import { Timeline } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
 import { LabelFilterBar } from './LabelFilterBar';
@@ -32,6 +33,7 @@ const EMPTY: never[] = [];
 export function ProjectPage() {
   const { id } = useParams();
   const [filter, setFilter] = useState<number[]>([]);
+  const caps = useCaps();
   const query = useQuery({
     queryKey: ['project', id],
     queryFn: () => apiFetch<ProjectDetail>(`/api/projects/${id}`),
@@ -115,7 +117,7 @@ export function ProjectPage() {
         />
         <Timeline tracks={visible} drafts={drafts} />
       </div>
-      <UploadPanel projectId={query.data.id} />
+      <UploadPanel projectId={query.data.id} trackCount={query.data.tracks.length} caps={caps} />
     </section>
   );
 }

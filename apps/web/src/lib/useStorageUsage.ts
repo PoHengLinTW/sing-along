@@ -1,4 +1,4 @@
-import { type StorageUsage, storageUsageSchema } from '@sing-along/shared';
+import { type Caps, DEFAULT_CAPS, type StorageUsage, storageUsageSchema } from '@sing-along/shared';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 
@@ -13,5 +13,19 @@ export function useStorageUsage() {
     queryKey: STORAGE_KEY,
     queryFn: async () => storageUsageSchema.parse(await apiFetch('/api/storage')),
     retry: false,
+    meta: { silent: true },
   });
+}
+
+/** The server's live caps, or the PRD defaults until (or unless) they load. */
+export function useCaps(): Caps {
+  const { data } = useStorageUsage();
+  if (!data) return DEFAULT_CAPS;
+  return {
+    maxFileBytes: data.maxFileBytes,
+    maxTrackMs: data.maxTrackMs,
+    maxTracksPerProject: data.maxTracksPerProject,
+    maxProjects: data.projectLimit,
+    maxStorageBytes: data.limitBytes,
+  };
 }

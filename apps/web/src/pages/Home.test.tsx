@@ -194,5 +194,38 @@ describe('Home: storage indicator', () => {
     renderHome();
     await screen.findByText(/no projects yet/i);
     expect(screen.queryByText(/GB used/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull(); // no error toast for an informational query
+  });
+});
+
+describe('Home: project limit (M3-03)', () => {
+  const usage = (projectCount: number) => ({
+    usedBytes: 0,
+    limitBytes: 8 * 1024 ** 3,
+    projectCount,
+    projectLimit: 100,
+    maxFileBytes: 60 * 1024 * 1024,
+    maxTrackMs: 600_000,
+    maxTracksPerProject: 10,
+  });
+
+  it('disables Create project at 100 projects and says why', async () => {
+    stubApi((url) => (url === '/api/storage' ? json(200, usage(100)) : json(200, [item()])));
+    renderHome();
+    const button = (await screen.findByRole('button', {
+      name: 'Create project',
+    })) as HTMLButtonElement;
+    await waitFor(() => expect(button.disabled).toBe(true));
+    expect(screen.getByText(/Project limit reached \(100\)/)).toBeTruthy();
+  });
+
+  it('stays enabled at 99', async () => {
+    stubApi((url) => (url === '/api/storage' ? json(200, usage(99)) : json(200, [item()])));
+    renderHome();
+    await screen.findByText('0 / 8 GB used');
+    expect(
+      (screen.getByRole('button', { name: 'Create project' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(screen.queryByText(/Project limit reached/)).toBeNull();
   });
 });
