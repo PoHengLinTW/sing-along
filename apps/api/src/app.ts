@@ -1,4 +1,4 @@
-import type { HealthResponse } from '@sing-along/shared';
+import type { Caps, HealthResponse } from '@sing-along/shared';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import Fastify from 'fastify';
 import { registerErrorHandler } from './errors';
@@ -12,6 +12,8 @@ export interface Deps {
   storage: Storage;
   /** Lifetime of presigned URLs; defaults to 900 s. */
   presignTtlSec?: number;
+  /** Storage caps (PRD §5.9); defaults to `DEFAULT_CAPS`. */
+  caps?: Caps;
 }
 
 export function buildApp(deps: Deps) {

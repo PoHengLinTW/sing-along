@@ -22,6 +22,38 @@ describe('loadConfig', () => {
     expect(c.publicOrigin).toBe('http://localhost:5173');
   });
 
+  it('defaults every cap to the PRD values', () => {
+    expect(loadConfig(valid).caps).toEqual({
+      maxFileBytes: 60 * 1024 * 1024,
+      maxTrackMs: 600_000,
+      maxTracksPerProject: 10,
+      maxProjects: 100,
+      maxStorageBytes: 8 * 1024 ** 3,
+    });
+  });
+
+  it('reads cap overrides from the environment', () => {
+    const c = loadConfig({
+      ...valid,
+      MAX_FILE_MB: '20',
+      MAX_TRACK_MINUTES: '5',
+      MAX_TRACKS_PER_PROJECT: '4',
+      MAX_PROJECTS: '7',
+      MAX_STORAGE_GB: '2',
+    });
+    expect(c.caps).toEqual({
+      maxFileBytes: 20 * 1024 * 1024,
+      maxTrackMs: 300_000,
+      maxTracksPerProject: 4,
+      maxProjects: 7,
+      maxStorageBytes: 2 * 1024 ** 3,
+    });
+  });
+
+  it('rejects a non-positive cap', () => {
+    expect(() => loadConfig({ ...valid, MAX_PROJECTS: '0' })).toThrow(/MAX_PROJECTS/);
+  });
+
   it('reads PORT and S3_FORCE_PATH_STYLE', () => {
     const c = loadConfig({ ...valid, PORT: '4000', S3_FORCE_PATH_STYLE: 'true' });
     expect(c.port).toBe(4000);

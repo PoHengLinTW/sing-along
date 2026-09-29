@@ -1,4 +1,4 @@
-import type { ApiError } from '@sing-along/shared';
+import type { ApiError, ErrorCode } from '@sing-along/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodType } from 'zod';
 
@@ -7,6 +7,7 @@ export class HttpError extends Error {
     readonly status: number,
     message: string,
     readonly fields?: Record<string, string>,
+    readonly code?: ErrorCode,
   ) {
     super(message);
   }
@@ -38,6 +39,7 @@ export function registerErrorHandler(app: FastifyInstance) {
       const body: ApiError = {
         message: err.message,
         ...(err.fields ? { fields: err.fields } : {}),
+        ...(err.code ? { code: err.code } : {}),
       };
       return reply.status(err.status).send(body);
     }

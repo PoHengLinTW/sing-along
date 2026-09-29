@@ -1,5 +1,6 @@
 import {
   type AudioUrlResponse,
+  DEFAULT_CAPS,
   extensionForMime,
   isAllowedAudioType,
   trackOrderSchema,
@@ -10,6 +11,8 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Deps } from '../app';
+import { fileTooLarge, storageFull, trackLimit, trackTooLong } from '../caps-messages';
+import { lockCaps, reservedBytes } from '../db/caps';
 import { loadProject, loadTrack } from '../db/projects-repo';
 import { labels, projects, trackLabels, tracks } from '../db/schema';
 import { HttpError, notFound, parseId, parseInput } from '../errors';
@@ -18,6 +21,7 @@ const DEFAULT_TTL_SEC = 900;
 
 export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
   const { db, storage } = deps;
+  const caps = deps.caps ?? DEFAULT_CAPS;
   const ttl = deps.presignTtlSec ?? DEFAULT_TTL_SEC;
   const expiresAt = () => new Date(Date.now() + ttl * 1000).toISOString();
 
@@ -34,6 +38,8 @@ export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
     if (!isAllowedAudioType(input.mimeType) || !ext) {
       throw new HttpError(415, 'Unsupported audio format');
     }
+    if (input.sizeBytes > caps.maxFileBytes) throw fileTooLarge(caps);
+    if (input.durationMs > caps.maxTrackMs) throw trackTooLong(caps);
     if (input.labels.length) {
       const found = await db
         .select({ id: labels.id })
@@ -46,6 +52,15 @@ export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
 
     const contentType = input.mimeType.split(';')[0]?.trim().toLowerCase() ?? input.mimeType;
     const trackId = await db.transaction(async (tx) => {
+      await lockCaps(tx);
+      const [count] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(tracks)
+        .where(eq(tracks.projectId, projectId));
+      if ((count?.n ?? 0) >= caps.maxTracksPerProject) throw trackLimit(caps);
+      if ((await reservedBytes(tx)) + input.sizeBytes > caps.maxStorageBytes) {
+        throw storageFull(caps);
+      }
       // The key contains the track id, which only exists after the insert: use a unique placeholder.
       const [row] = await tx
         .insert(tracks)

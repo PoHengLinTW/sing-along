@@ -1,4 +1,7 @@
+import type { Caps } from '@sing-along/shared';
 import { z } from 'zod';
+
+const positive = (def: number) => z.coerce.number().positive().default(def);
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3100),
@@ -13,6 +16,12 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   PUBLIC_ORIGIN: z.url(),
+  // Storage caps (PRD §5.9)
+  MAX_FILE_MB: positive(60),
+  MAX_TRACK_MINUTES: positive(10),
+  MAX_TRACKS_PER_PROJECT: z.coerce.number().int().positive().default(10),
+  MAX_PROJECTS: z.coerce.number().int().positive().default(100),
+  MAX_STORAGE_GB: positive(8),
   PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
@@ -29,6 +38,7 @@ export interface Config {
   };
   publicOrigin: string;
   presignTtlSec: number;
+  caps: Caps;
 }
 
 export class ConfigError extends Error {}
@@ -60,5 +70,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     publicOrigin: e.PUBLIC_ORIGIN,
     presignTtlSec: e.PRESIGN_TTL_SECONDS,
+    caps: {
+      maxFileBytes: Math.floor(e.MAX_FILE_MB * 1024 * 1024),
+      maxTrackMs: Math.floor(e.MAX_TRACK_MINUTES * 60_000),
+      maxTracksPerProject: e.MAX_TRACKS_PER_PROJECT,
+      maxProjects: e.MAX_PROJECTS,
+      maxStorageBytes: Math.floor(e.MAX_STORAGE_GB * 1024 ** 3),
+    },
   };
 }

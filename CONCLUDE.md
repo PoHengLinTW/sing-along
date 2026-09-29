@@ -338,3 +338,10 @@ Details and numbers: `spike/SPIKE_NOTES.md`.
 - **Upload of a draft** reuses the normal `upload-url → PUT → confirm` pipeline with `source = recording`; the local draft is deleted only after the server confirmed, so a failure or a reload mid-upload can simply be retried (a lost *response* after a successful confirm could create a duplicate track: accepted, the user can delete it).
 - **Labels for a draft** are sent if the draft has them, but there is no label editor on drafts yet: assign labels on the uploaded track. Follow-up if wanted.
 - **Not verifiable without hardware** (left open in `tasks/M2.md`): real microphone capture on iPhone and desktop Safari, CPU headroom while recording on iPhone, iPhone encode time, audible alignment. The built encoder worker was verified in Playwright's Chromium, Firefox and WebKit.
+
+---
+
+## Q22: M3 implementation decisions
+
+**Decision (details are in each task's commit message):**
+- **Caps (M3-01):** defaults live in `packages/shared/src/caps.ts` (`DEFAULT_CAPS`), overridable through env (`MAX_FILE_MB`, `MAX_TRACK_MINUTES`, `MAX_TRACKS_PER_PROJECT`, `MAX_PROJECTS`, `MAX_STORAGE_GB`). 1 MB = 2^20 bytes, 1 GB = 2^30. Every cap rejection carries `code` (`FILE_TOO_LARGE` 413, `TRACK_TOO_LONG` 422, `TRACK_LIMIT` 409, `STORAGE_FULL` 507, `PROJECT_LIMIT` 409). Size and duration are checked before any DB write; track, project and storage checks run inside a transaction that first takes one global Postgres advisory lock (`pg_advisory_xact_lock`), so concurrent requests can't both pass. Rejected: `SELECT ... FOR UPDATE` on the project row (does not cover the global budget or the project count), and a DB constraint (cannot express a sum).
