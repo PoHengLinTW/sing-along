@@ -69,6 +69,7 @@ The M0 spike lives in `spike/` (Vite + vanilla TS, served over HTTPS on the LAN 
   - Body: the **design decisions** made in the task. Say what was chosen, why, and which alternatives were rejected. If there were none, say "No design decisions."
   - Any decision that changes the plan also goes in `PRD.md` / `CONCLUDE.md` in the same commit (see the drift rule above).
   - Follow the attribution lines the harness specifies for commits.
+- **Branch and PR.** `main` is protected on GitHub: nothing is pushed to it directly, not even by admins. Work on a branch (e.g. `m2-recording`, one per milestone or chore), keep one commit per task, push, and open a PR. The `check` job (lint, typecheck, test) must be green and the branch up to date with `main` before it can merge. Pull the merged `main` before starting the next branch.
 - **E2E from M3 on.** Before M3 and M4 are closed, add Playwright E2E tests covering **every user flow** the milestone delivers (not just smoke flows), and run them green. The final task of the milestone is "E2E for M<n> user flows". List the flows in that task, then map each flow to a test. A milestone with a user flow that has no E2E test is not done.
   - M0, M1 and M2 have **no E2E requirement**. They rely on unit/integration tests (TDD) and manual checks. M3's E2E suite must still cover the user flows delivered in M1 and M2, since M3 is where the suite is first built.
   - M0 is a throwaway spike. Record its findings in `spike/SPIKE_NOTES.md`.

@@ -112,6 +112,9 @@ pnpm db:migrate                          # apply migrations + seed labels (safe 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck and test on every push and pull request,
 with PostgreSQL and the S3 stand-in as services.
 
+`main` is protected: changes go in through a pull request, and the `check` job must pass
+before it can merge.
+
 ### About the tests
 
 - API tests create a **throwaway Postgres database per test file**, so they never touch your dev
