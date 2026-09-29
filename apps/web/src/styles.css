@@ -62,3 +62,50 @@ button[data-destructive="true"]:not(:disabled) {
   background: #b3261e;
   color: #fff;
 }
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.project-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.project-list a {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #8884;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.project-list a strong {
+  flex: 1 1 12rem;
+}
+.skeleton-row {
+  height: 3rem;
+  border-radius: 8px;
+  background: #8882;
+}
+.state-box {
+  text-align: center;
+  padding: 2rem 0;
+}
+.field-error {
+  color: #b3261e;
+  margin: 0.25rem 0;
+}
+dialog label {
+  display: block;
+  margin: 0.5rem 0;
+}
+dialog input[type="text"],
+dialog input:not([type]) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
