@@ -13,8 +13,8 @@ anything. Don't put it anywhere you wouldn't want that.
 |---|---|
 | M0 Audio spike | Done, apart from manual device checks (`spike/SPIKE_NOTES.md`) |
 | M1 Core player | **Implemented** (this is what runs today) |
-| M2 Recording | **Implemented**, waiting for the manual device pass (M2-11 in `tasks/M2.md`) |
-| M3 Hardening and deploy | Not started |
+| M2 Recording | **Implemented**; desktop pass done, iPhone and Safari checks still open (`tasks/M2.md`) |
+| M3 Hardening and deploy | **Built** (caps, cleanup, error states, Docker image, compose stack); the first real deploy and its smoke test are still to do (`tasks/M3.md`) |
 | M4 PWA and mobile | Not started |
 
 ### What works today (M1)
@@ -123,6 +123,10 @@ and names it. See `.env.example` for the full list:
 | `S3_FORCE_PATH_STYLE` | `true` for the local stand-in, `false` for Cloudflare R2 |
 | `PUBLIC_ORIGIN` | Origin the browser loads the app from |
 | `PRESIGN_TTL_SECONDS` | Lifetime of signed URLs (default 900) |
+| `MAX_FILE_MB`, `MAX_TRACK_MINUTES` | Per-file caps (defaults 60 MB, 10 min) |
+| `MAX_TRACKS_PER_PROJECT`, `MAX_PROJECTS`, `MAX_STORAGE_GB` | Project caps (defaults 10, 100, 8 GB) |
+| `CLEANUP_CRON` | When the nightly cleanup of abandoned uploads runs (default `30 3 * * *`; `off` disables) |
+| `WEB_DIST_DIR`, `MIGRATIONS_DIR` | Set by the Docker image only: the built web app to serve and the migrations folder |
 
 ## Commands
 
@@ -135,6 +139,9 @@ pnpm test                                # Vitest, all packages
 pnpm --filter @sing-along/web exec vitest run src/audio/engine.test.ts   # one test file
 pnpm db:generate                         # new Drizzle migration after editing db/schema.ts
 pnpm db:migrate                          # apply migrations + seed labels (safe to repeat)
+pnpm cleanup --dry-run                   # show which abandoned uploads / orphaned files would be deleted
+pnpm cleanup                             # ...and delete them (this also runs nightly inside the API)
+pnpm build                               # production build of web and api (the Docker image does this)
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck and test on every push and pull request,
@@ -151,6 +158,72 @@ before it can merge.
 - Web tests use a fake `AudioContext` (`apps/web/src/audio/fake.ts`) and mock wavesurfer, so no
   audio device or canvas is needed.
 - Audio you can *hear* (sync, latency, iPhone behaviour) is checked by hand.
+
+## Deploy
+
+The production stack is `docker-compose.yml`: the app (one image: the API plus the built web
+app), PostgreSQL on a named volume, and `cloudflared`, which connects the app to Cloudflare. **No
+port is published on the host**; the tunnel is the only way in, and it supplies the HTTPS that the
+microphone and the service worker need. Audio is stored in Cloudflare R2 (see "R2 setup" below).
+
+You need a machine with Docker and Compose v2, a domain on Cloudflare, and the R2 bucket.
+
+### 1. Create the tunnel
+
+In Cloudflare **Zero Trust > Networks > Tunnels > Create a tunnel**, choose *Cloudflared*, name it,
+and copy the **tunnel token** (the long string after `--token` in the install command). Then add a
+**public hostname**: your domain (for example `sing.example.com`), service type **HTTP**, URL
+`app:3100`. `app` is the name of the app container on the compose network.
+
+### 2. Configure
+
+```bash
+git clone <this repo> && cd sing-along
+cp .env.production.example .env      # then edit .env
+```
+
+| Variable | Meaning |
+|---|---|
+| `POSTGRES_PASSWORD` | Database password. Letters and digits only. |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | The R2 bucket and its bucket-scoped token |
+| `PUBLIC_ORIGIN` | `https://<your domain>`: the origin the R2 CORS policy must allow |
+| `TUNNEL_TOKEN` | The tunnel token from step 1 |
+| `MAX_*`, `CLEANUP_CRON` | Optional: caps and cleanup schedule (defaults in `.env.production.example`) |
+
+Compose refuses to start and names any required variable that is missing.
+
+### 3. First start
+
+```bash
+docker compose up -d --build
+docker compose ps                    # postgres, app and cloudflared should be running / healthy
+docker compose logs -f app           # "Cleanup scheduled ..." means it is up
+curl https://<your domain>/api/health    # {"status":"ok"}
+```
+
+The app waits for PostgreSQL to be healthy, applies the migrations and seeds the preset labels
+before it starts listening, and cloudflared waits for the app to be healthy.
+
+### Updating
+
+```bash
+git pull
+docker compose up -d --build         # rebuilds the image; new migrations run on start
+```
+
+The database volume is untouched. If you publish the image to a registry instead, set `APP_IMAGE`
+in `.env` and use `docker compose pull && docker compose up -d`. Migrations only go forward, so a
+rollback means restoring the database you backed up yourself (there are no automatic backups by
+design).
+
+### Day to day
+
+- `docker compose down` stops everything and **keeps** the data; `docker compose down -v` deletes
+  the database volume too.
+- The API deletes abandoned uploads every night. To look first:
+  `docker compose exec app node dist/cleanup-cli.js --dry-run`.
+- For debugging, uncomment the `ports:` lines of the `app` service to reach it on
+  `127.0.0.1:3100` from the server itself.
 
 ## Troubleshooting
 
