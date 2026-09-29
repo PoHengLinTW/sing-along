@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { NotFound } from './NotFound';
+import { ProjectHeader } from './ProjectHeader';
 
 export function ProjectPage() {
   const { id } = useParams();
@@ -18,7 +19,7 @@ export function ProjectPage() {
   if (!query.data) return <p>Loading…</p>;
   return (
     <section>
-      <h1>{query.data.title}</h1>
+      <ProjectHeader project={query.data} />
     </section>
   );
 }

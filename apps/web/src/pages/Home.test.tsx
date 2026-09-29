@@ -136,7 +136,7 @@ describe('Home: create project', () => {
   });
 
   it('shows a server-side field error under the title', async () => {
-    stubApi((url, init) =>
+    stubApi((_url, init) =>
       init?.method === 'POST'
         ? json(400, { message: 'Title is required', fields: { title: 'Server says no' } })
         : json(200, [item()]),

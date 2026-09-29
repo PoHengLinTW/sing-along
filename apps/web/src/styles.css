@@ -109,3 +109,24 @@ dialog input:not([type]) {
   width: 100%;
   box-sizing: border-box;
 }
+.editable {
+  margin: 0.5rem 0;
+}
+.editable label {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.editable input,
+.editable textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+.saved {
+  font-size: 0.8rem;
+  color: #2e7d32;
+}
+button.danger {
+  color: #b3261e;
+}
