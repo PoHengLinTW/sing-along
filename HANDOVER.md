@@ -30,6 +30,7 @@ Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in 
 ## 4. What only the user can do (real devices), and honest limits
 
 - Run the **M2-11 checklist** in `tasks/M2.md` on desktop Chrome, desktop Safari, iPhone Safari (and Android Chrome if available), with wired and Bluetooth headphones. Nothing audible has been judged: alignment by ear, glitches while recording, mute silence, Bluetooth delay numbers (README "Known issues" wants them).
+- **iPhone is out of scope for now (user decision, 2026-09-28).** The iPhone criteria in `tasks/M2.md` are marked deferred, not passed; M3/M4 must not assume they were verified. Desktop was confirmed by the user.
 - Never verified on real hardware: mic capture on iPhone/desktop Safari, iPhone CPU while recording with the live waveform, iPhone FLAC encode time (desktop is under a second), a screen lock or app switch mid-take, real Safari playback of the encoded FLAC.
 - Known gaps, by choice: drafts have no label editor (labels are set on the uploaded track); a lost response after a successful confirm could create a duplicate track on retry; only ready drafts get lanes (recording/encoding show in the live lane and `EncodeStatus`).
 - mp3/m4a decoding was never tested per browser even though uploads accept them.
