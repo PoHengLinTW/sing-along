@@ -1,10 +1,14 @@
-// Bundles the server and the cleanup CLI into dist/ for the production image. One bundle per entry
+// Bundles the server and the CLIs (cleanup, CORS check) into dist/ for the production image. One bundle per entry
 // keeps node_modules out of the image (the workspace's shared package is TypeScript source, which
 // Node cannot load from node_modules anyway).
 import { build } from 'esbuild';
 
 await build({
-  entryPoints: { server: 'src/server.ts', 'cleanup-cli': 'src/cleanup-cli.ts' },
+  entryPoints: {
+    server: 'src/server.ts',
+    'cleanup-cli': 'src/cleanup-cli.ts',
+    'cors-check-cli': 'src/cors-check-cli.ts',
+  },
   outdir: 'dist',
   bundle: true,
   platform: 'node',

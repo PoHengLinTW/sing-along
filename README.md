@@ -225,6 +225,43 @@ design).
 - For debugging, uncomment the `ports:` lines of the `app` service to reach it on
   `127.0.0.1:3100` from the server itself.
 
+## R2 setup
+
+Audio lives in a Cloudflare R2 bucket. The browser uploads and downloads **directly** to and from
+it with signed URLs, so the bucket needs a CORS policy that allows your app's origin.
+
+1. **Enable R2.** In the Cloudflare dashboard open **R2 Object Storage** and enable it.
+   Cloudflare asks for a **payment method** even though the free tier (10 GB of storage, no
+   egress fees) covers this app's 8 GB cap; nothing is charged until you pass the free tier.
+2. **Create the bucket** (for example `sing-along`) with the default settings. Leave public access
+   off: every file is reached through a signed URL.
+3. **Create an API token** limited to that bucket: R2 > **Manage API tokens** > **Create API
+   token**, permission **Object Read & Write**, under *Specify bucket(s)* pick only your bucket.
+   Copy the **Access Key ID**, the **Secret Access Key** and the account's S3 endpoint
+   (`https://<account-id>.r2.cloudflarestorage.com`) into `.env` as `S3_ACCESS_KEY_ID`,
+   `S3_SECRET_ACCESS_KEY` and `S3_ENDPOINT`, and put the bucket name in `S3_BUCKET`. The secret is
+   shown once.
+4. **Add the CORS policy.** Bucket > **Settings** > **CORS policy** > **Add**, and paste
+   `deploy/r2-cors.json` after replacing the origin with your `PUBLIC_ORIGIN` (exactly the address
+   in the browser: scheme and host, no trailing slash). It allows `GET`, `PUT` and `HEAD` with the
+   `Content-Type` and `Content-Length` headers, for that one origin.
+5. **Check it.** With `.env` filled in (on the server: `docker compose exec app node
+   dist/cors-check-cli.js`; on your machine: `pnpm check:cors`), the tool sends real preflight
+   requests and prints `ok` for your origin and `ok` for a foreign one that must be refused:
+
+   ```
+   ok   allowed: https://sing.example.com
+   ok   refused: https://cors-check.invalid
+   ```
+
+   Pass `--origin` to check another origin. Any `FAIL` line says what is wrong.
+6. **Set a billing alert.** In the dashboard open **Notifications** and add a usage-based billing
+   notification, so an unexpected bill (for example after the free tier is exceeded) reaches you
+   by email.
+
+Deleted tracks and projects remove their files from the bucket; anything an interrupted upload
+leaves behind is removed by the nightly cleanup (`pnpm cleanup --dry-run` to look).
+
 ## Troubleshooting
 
 - **`EADDRINUSE` on 3000 / 5432**: another program owns the port. This project deliberately uses
@@ -232,7 +269,8 @@ design).
   `apps/web/vite.config.ts`, and the port mapping in `docker-compose.dev.yml`.
 - **API exits with "Invalid environment configuration"**: copy `.env.example` to `.env`.
 - **Uploads fail with a network or CORS error**: check the S3 container is up
-  (`docker compose -f docker-compose.dev.yml ps`); the compose file allows the dev origin.
+  (`docker compose -f docker-compose.dev.yml ps`); the compose file allows the dev origin. In
+  production run the CORS check from "R2 setup".
 - **API tests can't connect**: start the compose stack, or set `TEST_DATABASE_URL`.
 - **No sound**: browsers keep audio suspended until you click or press a key on the page.
 - **Vite says "Port 5173 is in use, trying another one"**: it moved to the next free port (see the

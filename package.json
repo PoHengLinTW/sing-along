@@ -14,6 +14,7 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
     "cleanup": "pnpm --filter @sing-along/api cleanup",
+    "check:cors": "pnpm --filter @sing-along/api check:cors",
     "db:generate": "pnpm --filter @sing-along/api db:generate",
     "db:migrate": "pnpm --filter @sing-along/api db:migrate"
   },
