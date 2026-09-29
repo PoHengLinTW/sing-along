@@ -24,6 +24,7 @@ export function TrackPanels({
   drafts = [],
   onTrackLatency,
   onDraftLatency,
+  onDraftUpload,
 }: {
   project: ProjectDetail;
   /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
@@ -33,6 +34,7 @@ export function TrackPanels({
   drafts?: DraftView[];
   onTrackLatency?: (track: TrackDto, ms: number) => void;
   onDraftLatency?: (draft: DraftView, ms: number) => void;
+  onDraftUpload?: (draft: DraftView, onProgress: (fraction: number) => void) => Promise<void>;
 }) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
@@ -102,7 +104,12 @@ export function TrackPanels({
         />
       ))}
       {drafts.map((d) => (
-        <DraftPanel key={d.id} draft={d} onLatency={(ms) => onDraftLatency?.(d, ms)} />
+        <DraftPanel
+          key={d.id}
+          draft={d}
+          onLatency={(ms) => onDraftLatency?.(d, ms)}
+          onUpload={onDraftUpload}
+        />
       ))}
       {isRecording && (
         <div

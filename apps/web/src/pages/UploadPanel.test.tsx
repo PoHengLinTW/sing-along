@@ -45,7 +45,7 @@ function makeDeps(): UploadDeps {
     }) as UploadDeps['apiFetch'],
     put: (url, file, _h, onProgress, signal) =>
       new Promise<void>((resolve, reject) => {
-        puts.push({ url, onProgress, resolve, reject, signal, name: file.name });
+        puts.push({ url, onProgress, resolve, reject, signal, name: (file as File).name });
         signal?.addEventListener('abort', () => reject(new DOMException('x', 'AbortError')));
       }),
   };

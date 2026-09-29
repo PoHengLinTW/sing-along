@@ -59,6 +59,24 @@ describe('mixer store', () => {
   });
 });
 
+describe('mixer move (a draft becomes an uploaded track)', () => {
+  it('carries volume, mute and solo to the new id and forgets the old one', () => {
+    const m = createMixerStore();
+    m.getState().setVolume(-5, 0.4);
+    m.getState().toggleMute(-5);
+    m.getState().toggleSolo(-5);
+    m.getState().move(-5, 12);
+    expect(m.getState().get(12)).toEqual({ volume: 0.4, muted: true, solo: true });
+    expect(m.getState().byId[-5]).toBeUndefined();
+  });
+
+  it('does nothing when the draft was never mixed', () => {
+    const m = createMixerStore();
+    m.getState().move(-5, 12);
+    expect(m.getState().byId).toEqual({});
+  });
+});
+
 describe('mixer bound to the engine', () => {
   it('changes take effect live on loaded tracks (gain nodes)', () => {
     add(1);

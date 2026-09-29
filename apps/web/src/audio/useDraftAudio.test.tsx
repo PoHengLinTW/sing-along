@@ -5,6 +5,8 @@ import { useDraftAudio } from './useDraftAudio';
 
 const view = (over: Partial<DraftView> = {}): DraftView => ({
   id: 'd1',
+  projectId: 1,
+  mimeType: 'audio/flac',
   engineId: -5,
   name: 'Take 1',
   performer: '',

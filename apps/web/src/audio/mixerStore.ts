@@ -17,6 +17,8 @@ export interface MixerState {
   toggleMute(id: number): void;
   setMuted(id: number, muted: boolean): void;
   toggleSolo(id: number): void;
+  /** A draft became an uploaded track: its mix goes with it. */
+  move(fromId: number, toId: number): void;
   /** Drop a deleted track's state. */
   forget(id: number): void;
   reset(): void;
@@ -34,6 +36,13 @@ export const createMixerStore = () =>
       toggleMute: (id) => patch(id, { muted: !get().get(id).muted }),
       setMuted: (id, muted) => patch(id, { muted }),
       toggleSolo: (id) => patch(id, { solo: !get().get(id).solo }),
+      move: (fromId, toId) =>
+        set((s) => {
+          const mix = s.byId[fromId];
+          if (!mix) return s;
+          const { [fromId]: _moved, ...rest } = s.byId;
+          return { byId: { ...rest, [toId]: mix } };
+        }),
       forget: (id) =>
         set((s) => {
           const byId = { ...s.byId };

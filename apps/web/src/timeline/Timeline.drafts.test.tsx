@@ -11,6 +11,8 @@ vi.mock('wavesurfer.js', () => ({
 
 const draft = (over: Partial<DraftView> = {}): DraftView => ({
   id: 'd1',
+  projectId: 1,
+  mimeType: 'audio/flac',
   engineId: -7,
   name: 'Take 1',
   performer: '',

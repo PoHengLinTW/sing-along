@@ -17,6 +17,8 @@ export function draftEngineId(draftId: string): number {
 /** A ready draft, shaped for the lane, the panel and the engine. */
 export interface DraftView {
   id: string;
+  projectId: number;
+  mimeType: string;
   engineId: number;
   name: string;
   performer: string;
@@ -25,6 +27,8 @@ export interface DraftView {
   durationMs: number;
   peaks: number[];
   blob: Blob;
+  /** Labels chosen for the take; sent with the upload. */
+  labelIds?: number[];
 }
 
 /** Null while the take is still recording or encoding: only an encoded draft can be played. */
@@ -32,6 +36,8 @@ export function toDraftView(d: Draft): DraftView | null {
   if (d.status !== 'ready' || !d.blob || !d.peaks || d.durationMs === undefined) return null;
   return {
     id: d.id,
+    projectId: d.projectId,
+    mimeType: d.mimeType ?? 'audio/flac',
     engineId: draftEngineId(d.id),
     name: d.name,
     performer: d.performer,
@@ -40,5 +46,6 @@ export function toDraftView(d: Draft): DraftView | null {
     durationMs: d.durationMs,
     peaks: d.peaks,
     blob: d.blob,
+    labelIds: d.labelIds ?? [],
   };
 }

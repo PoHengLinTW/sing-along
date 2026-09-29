@@ -43,6 +43,8 @@ export const uploadUrlRequestSchema = z.object({
   sizeBytes: z.number().int().positive(),
   durationMs: z.number().int().positive(),
   startOffsetMs: z.number().int().min(-OFFSET_MAX_MS).max(OFFSET_MAX_MS).default(0),
+  /** A recorded take arrives already aligned by ear; uploaded files leave it at 0. */
+  latencyOffsetMs: z.number().int().min(-OFFSET_MAX_MS).max(OFFSET_MAX_MS).default(0),
   source: z.enum(['upload', 'recording']),
   peaks: z.array(z.number().min(0).max(1)).max(PEAKS_MAX_LENGTH),
 });

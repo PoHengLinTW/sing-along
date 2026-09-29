@@ -15,11 +15,34 @@ interface Props {
   draft: DraftView;
   store?: DraftStore;
   onLatency?: (ms: number) => void;
+  /** Uploads the take (progress 0..1); the parent swaps the draft for the new track. */
+  onUpload?: (draft: DraftView, onProgress: (fraction: number) => void) => Promise<void>;
 }
 
 /** The left-hand controls of a take that has not been uploaded yet. It exists only in this browser. */
-export function DraftPanel({ draft, store, onLatency = () => {} }: Props) {
+type UploadState =
+  | { status: 'idle' }
+  | { status: 'uploading'; progress: number }
+  | { status: 'error'; message: string };
+
+export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Props) {
   const [confirming, setConfirming] = useState(false);
+  const [upload, setUpload] = useState<UploadState>({ status: 'idle' });
+  const uploading = upload.status === 'uploading';
+
+  const startUpload = async () => {
+    if (!onUpload || uploading) return;
+    setUpload({ status: 'uploading', progress: 0 });
+    try {
+      await onUpload(draft, (progress) => setUpload({ status: 'uploading', progress }));
+      setUpload({ status: 'idle' });
+    } catch (err) {
+      setUpload({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'The upload failed.',
+      });
+    }
+  };
   const open = async () => store ?? (await getDraftStore());
 
   return (
@@ -50,12 +73,38 @@ export function DraftPanel({ draft, store, onLatency = () => {} }: Props) {
         }}
         placeholder="Performer"
       />
-      <span className="hint">Not uploaded: only on this device</span>
+      <div className="draft-upload">
+        {upload.status === 'error' ? (
+          <>
+            <span role="alert" className="draft-upload-error" title={upload.message}>
+              Upload failed: {upload.message}
+            </span>
+            <button type="button" onClick={() => void startUpload()}>
+              Retry
+            </button>
+          </>
+        ) : uploading ? (
+          <progress aria-label={`Uploading ${draft.name}`} max={1} value={upload.progress} />
+        ) : (
+          <span className="hint">Not uploaded: only on this device</span>
+        )}
+        {onUpload && upload.status !== 'error' && (
+          <button
+            type="button"
+            aria-label={`Upload ${draft.name}`}
+            disabled={uploading}
+            onClick={() => void startUpload()}
+          >
+            Upload
+          </button>
+        )}
+      </div>
       <MixControls id={draft.engineId}>
         <button
           type="button"
           className="danger"
           aria-label={`Discard ${draft.name}`}
+          disabled={uploading}
           onClick={() => setConfirming(true)}
         >
           🗑

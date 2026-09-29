@@ -23,6 +23,7 @@ import { NotFound } from './NotFound';
 import { ProjectHeader } from './ProjectHeader';
 import { TrackPanels } from './TrackPanels';
 import { UploadPanel } from './UploadPanel';
+import { useDraftUploader } from './useDraftUploader';
 import { useLatencyEditing } from './useLatencyEditing';
 
 const EMPTY: never[] = [];
@@ -56,6 +57,7 @@ export function ProjectPage() {
   // Offsets being edited apply at once (lane, engine, panel); saving follows after a pause.
   const latency = useLatencyEditing(Number(id), query.data?.tracks ?? EMPTY, savedDrafts);
   const drafts = latency.drafts;
+  const uploadDraftTake = useDraftUploader(Number(id));
   const project = useMemo(
     () => (query.data ? { ...query.data, tracks: latency.tracks } : undefined),
     [query.data, latency.tracks],
@@ -107,6 +109,7 @@ export function ProjectPage() {
           reorderDisabled={filter.length > 0}
           onTrackLatency={latency.setTrackLatency}
           onDraftLatency={latency.setDraftLatency}
+          onDraftUpload={uploadDraftTake}
         />
         <Timeline tracks={visible} drafts={drafts} />
       </div>

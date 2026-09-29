@@ -266,3 +266,25 @@ button[aria-pressed="true"] {
   border: 1px dashed #64748b;
   border-radius: 6px;
 }
+.draft-upload {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+.draft-upload progress {
+  flex: 1;
+  min-width: 0;
+}
+.draft-upload .hint,
+.draft-upload-error {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-upload-error {
+  color: #e11d48;
+  font-size: 0.8rem;
+}

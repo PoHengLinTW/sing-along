@@ -46,6 +46,25 @@ const body = (over: Record<string, unknown> = {}) => ({
 const upload = (over?: Record<string, unknown>, id = projectId) =>
   app.inject({ method: 'POST', url: `/api/projects/${id}/tracks/upload-url`, payload: body(over) });
 
+describe('POST /api/projects/:id/tracks/upload-url latency offset', () => {
+  it('stores the latency offset of a recorded take, so it is aligned from the first play', async () => {
+    const res = await upload({ source: 'recording', latencyOffsetMs: -85 });
+    expect(res.statusCode).toBe(201);
+    const [tr] = await t.db.select().from(tracks).where(eq(tracks.id, res.json().trackId));
+    expect(tr).toMatchObject({ source: 'recording', latencyOffsetMs: -85 });
+  });
+
+  it('defaults to 0 for a plain upload', async () => {
+    const res = await upload();
+    const [tr] = await t.db.select().from(tracks).where(eq(tracks.id, res.json().trackId));
+    expect(tr?.latencyOffsetMs).toBe(0);
+  });
+
+  it('rejects an offset outside ±600000 ms', async () => {
+    expect((await upload({ latencyOffsetMs: 600001 })).statusCode).toBe(400);
+  });
+});
+
 describe('POST /api/projects/:id/tracks/upload-url', () => {
   it('creates a pending track and returns a presigned PUT bound to type and size', async () => {
     const res = await upload();
