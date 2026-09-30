@@ -64,13 +64,16 @@ test.describe('project header', () => {
     const artist = page.getByLabel('Artist');
     await artist.fill('Someone');
     await artist.press('Enter');
-    await expect(page.getByText('Saved')).toBeVisible();
+    // Each field has its own indicator; several can be on screen at once.
+    const savedIn = (label: string) =>
+      page.locator('.editable', { has: page.getByLabel(label) }).getByText('Saved');
+    await expect(savedIn('Artist')).toBeVisible();
 
     const notes = page.getByLabel('Notes');
     await notes.fill('Key of G');
     await notes.press('Enter'); // a newline in notes, not a save
     await notes.blur();
-    await expect(page.getByText('Saved')).toBeVisible();
+    await expect(savedIn('Notes')).toBeVisible();
 
     const title = page.getByLabel('Title');
     const original = await title.inputValue();
