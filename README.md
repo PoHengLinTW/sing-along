@@ -172,18 +172,23 @@ touches your dev data. Failed tests leave a trace in `e2e/test-results`
 ## Deploy
 
 The production stack is `docker-compose.yml`: the app (one image: the API plus the built web
-app), PostgreSQL on a named volume, and `cloudflared`, which connects the app to Cloudflare. **No
-port is published on the host**; the tunnel is the only way in, and it supplies the HTTPS that the
-microphone and the service worker need. Audio is stored in Cloudflare R2 (see "R2 setup" below).
+app) and PostgreSQL on a named volume. **No port is published on the host.** The app joins the
+external Docker network `proxy` that your existing `cloudflared` tunnel is on, and the tunnel
+routes your domain to it; Cloudflare supplies the HTTPS that the microphone and the service
+worker need. PostgreSQL is only on the stack's private network. Audio is stored in Cloudflare R2
+(see "R2 setup" above).
 
-You need a machine with Docker and Compose v2, a domain on Cloudflare, and the R2 bucket.
+You need a machine with Docker and Compose v2, a running Cloudflare Tunnel whose `cloudflared`
+container is on a Docker network named `proxy` (create it once with `docker network create proxy`
+if it does not exist; if your network has another name, change the `proxy` entries in
+`docker-compose.yml`), a domain on Cloudflare, and the R2 bucket.
 
-### 1. Create the tunnel
+### 1. Add a route to your tunnel
 
-In Cloudflare **Zero Trust > Networks > Tunnels > Create a tunnel**, choose *Cloudflared*, name it,
-and copy the **tunnel token** (the long string after `--token` in the install command). Then add a
-**public hostname**: your domain (for example `sing.example.com`), service type **HTTP**, URL
-`app:3100`. `app` is the name of the app container on the compose network.
+In Cloudflare **Zero Trust > Networks > Tunnels**, open your existing tunnel and add a **public
+hostname**: your domain (for example `sing-along.example.com`), service type **HTTP**, URL
+`sing_along_app:3100`. `sing_along_app` is the app's container name on the `proxy` network. Not
+`localhost`: cloudflared runs in its own container.
 
 ### 2. Configure
 
@@ -197,7 +202,6 @@ cp .env.production.example .env      # then edit .env
 | `POSTGRES_PASSWORD` | Database password. Letters and digits only. |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | The R2 bucket and its bucket-scoped token |
 | `PUBLIC_ORIGIN` | `https://<your domain>`: the origin the R2 CORS policy must allow |
-| `TUNNEL_TOKEN` | The tunnel token from step 1 |
 | `MAX_*`, `CLEANUP_CRON` | Optional: caps and cleanup schedule (defaults in `.env.production.example`) |
 
 Compose refuses to start and names any required variable that is missing.
@@ -206,13 +210,13 @@ Compose refuses to start and names any required variable that is missing.
 
 ```bash
 docker compose up -d --build
-docker compose ps                    # postgres, app and cloudflared should be running / healthy
+docker compose ps                    # sing_along_postgres and sing_along_app: running / healthy
 docker compose logs -f app           # "Cleanup scheduled ..." means it is up
 curl https://<your domain>/api/health    # {"status":"ok"}
 ```
 
-The app waits for PostgreSQL to be healthy, applies the migrations and seeds the preset labels
-before it starts listening, and cloudflared waits for the app to be healthy.
+The app waits for PostgreSQL to be healthy, then applies the migrations and seeds the preset
+labels before it starts listening. Your tunnel finds it by container name as soon as it is up.
 
 ### Updating
 

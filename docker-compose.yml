@@ -1,13 +1,16 @@
-# Production stack: the app (API + web), Postgres on a named volume, and a Cloudflare Tunnel.
-# Configure everything through .env (copy .env.production.example). See README, "Deploy".
+# Production stack: the app (API + web) and Postgres on a named volume. Configure everything
+# through .env (copy .env.production.example). See README, "Deploy".
 #
-# No service publishes a host port: the only way in is the tunnel, which reaches the app over the
-# private compose network at http://app:3100.
+# No service publishes a host port. The app joins the external `proxy` network that your existing
+# cloudflared tunnel is on, and the tunnel reaches it at http://sing_along_app:3100. Postgres is
+# only on this stack's private network. Create the network once if it does not exist:
+#   docker network create proxy
 name: sing-along
 
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: sing_along_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: singalong
@@ -20,10 +23,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - internal
 
   app:
     build: .
     image: ${APP_IMAGE:-sing-along:latest}
+    container_name: sing_along_app
     restart: unless-stopped
     depends_on:
       postgres:
@@ -44,19 +50,18 @@ services:
       MAX_PROJECTS: ${MAX_PROJECTS:-100}
       MAX_STORAGE_GB: ${MAX_STORAGE_GB:-8}
       CLEANUP_CRON: ${CLEANUP_CRON:-30 3 * * *}
+    networks:
+      - internal
+      - proxy
     # For debugging only, reachable from this machine alone. Uncomment to use:
     # ports:
     #   - '127.0.0.1:3100:3100'
 
-  cloudflared:
-    image: cloudflare/cloudflared:${CLOUDFLARED_TAG:-latest}
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env (Cloudflare Zero Trust, Tunnels)}
-    depends_on:
-      app:
-        condition: service_healthy
-
 volumes:
   pgdata:
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    external: true

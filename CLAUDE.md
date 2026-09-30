@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `packages/shared/src/caps.ts`: `DEFAULT_CAPS`, `ErrorCode`s, `storageUsageSchema`, `formatBytes`. The API reads overrides from env (`MAX_FILE_MB`, ...); the client learns the live caps from `GET /api/storage` (`useCaps`).
 - `apps/api/src`: `db/caps.ts` (one advisory lock around every cap check + insert), `caps-messages.ts` (the user-facing text of each rejection), `routes/storage.ts`, `cleanup.ts` + `cleanup-schedule.ts` + `cleanup-cli.ts` (orphan/pending cleanup), `web-static.ts` (SPA serving and cache headers), `cors-check.ts` + `cors-check-cli.ts`, `db/setup.ts` (`migrateAndSeed`, run at server start), `build.mjs` (esbuild bundles for the image).
 - `apps/web/src`: `pages/StorageMeter.tsx`, `lib/caps.ts`, `lib/useStorageUsage.ts` (`useCaps`), `pages/EmptyProject.tsx`, `pages/RouteError.tsx`, `lib/LabelsLoadError.tsx`. The storage query is keyed `['projects','storage']` on purpose (see `CONCLUDE.md` Q22).
-- Deploy: `Dockerfile` (bundled API, no `node_modules`, uid 1000), `docker-compose.yml` (postgres, app, cloudflared; no host ports), `.env.production.example`, `deploy/r2-cors.json`. README has "Deploy" and "R2 setup".
+- Deploy: `Dockerfile` (bundled API, no `node_modules`, uid 1000), `docker-compose.yml` (postgres and app; no host ports; the app joins the external `proxy` network of the user's existing cloudflared tunnel as `sing_along_app:3100`), `.env.production.example`, `deploy/r2-cors.json`. README has "Deploy" and "R2 setup".
 - `e2e/`: Playwright (`pnpm e2e` builds, then runs). `start-server.mjs` recreates the `singalong_e2e` database and `sing-along-e2e` bucket and starts the built server on port 3300; specs are in `e2e/tests/`, helpers in `e2e/support/`. Needs the dev compose stack. Selector gotchas: `.upload-items > li` (the label picker has nested `li`), `getByRole` names match by substring (use `exact: true` for "Mute all X" vs "Unmute all X"), Chromium's fake microphones get new device ids on every page load.
 
 ## Handover (read this first in a new session)
@@ -67,7 +67,7 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
 - **Tracks can't be changed after upload.** A new take means a new track. The audio cache (Cache API) is keyed by **track ID**, not by presigned URL, and depends on this.
 - **Mixer state** (volume, mute, solo, zoom) lives only in each browser's localStorage and is never sent to the server.
 - **Caps** (enforced on the server, set by env vars): 60 MB per file, 10 min per track, 10 tracks per project, 100 projects, an 8 GB global total (active + pending sizes). Nothing is ever removed automatically to make room.
-- **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres + cloudflared (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).
+- **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres, reached through the user's existing cloudflared tunnel (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).
 
 ## Commands
 
