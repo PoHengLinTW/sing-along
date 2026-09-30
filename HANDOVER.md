@@ -11,10 +11,10 @@ disagrees with the code, the code wins: fix this file.
 | M0 spike (`spike/`) | 11 of 32 criteria ticked in `tasks/M0.md`; device and listening checks remain. Conditional go (`spike/SPIKE_NOTES.md`). |
 | M1 core player | Implemented, merged. |
 | M2 recording | Implemented, merged (PR #3). Desktop pass confirmed by the user; iPhone deferred by the user; Bluetooth numbers and desktop Safari / Android Chrome open (`tasks/M2.md`). |
-| M3 hardening and deploy | **M3-01 to M3-07 and M3-10 built**, one commit each on `m3-hardening` (not pushed, no PR yet). **M3-08 and M3-09 need the user** (Cloudflare account and domain). |
+| M3 hardening and deploy | **M3-01 to M3-07 and M3-10 built**, one commit each on `m3-hardening` (pushed, PR #5). **M3-08 and M3-09 need the user** (Cloudflare account and domain). |
 | M4 PWA and mobile | Not started. Its E2E flows must be added to `e2e/` (CLAUDE.md rule). |
 
-Gate at the end of the branch: `pnpm lint && pnpm typecheck && pnpm test` green (shared 38, api 141, web 591), and `pnpm e2e` green: 75 tests, three consecutive local runs. The `e2e` and `docker` jobs in `.github/workflows/ci.yml` have **never run on GitHub**; `main` requires only `check`.
+Gate at the end of the branch: `pnpm lint && pnpm typecheck && pnpm test` green (shared 38, api 141, web 591), and `pnpm e2e` green: 75 tests, three consecutive local runs. The `e2e` and `docker` CI jobs run on GitHub (PR #5): green three times in a row after one test fix. `main` requires only `check`; making `e2e` and `docker` required is the user's choice in branch protection.
 
 ## 2. How we work
 
@@ -22,7 +22,7 @@ Unchanged (see `CLAUDE.md`): TDD, one commit per task with the design decisions 
 
 ## 3. What only the user can do (the QA list)
 
-1. **Push the branch and open the PR** (`m3-hardening`). Watch the three CI jobs; `e2e` and `docker` are new. The M3-10 criterion "passes across 3 consecutive runs on GitHub" is still open.
+1. **Review and merge PR #5** (`m3-hardening`); all three CI jobs are green.
 2. **R2 (M3-08):** README "R2 setup": enable R2 (payment method needed), create the bucket, a bucket-scoped Object Read & Write token, paste `deploy/r2-cors.json` with the real origin, set a billing alert (dashboard label may differ from the README wording), then run `pnpm check:cors`. The tool was only run against the dev store.
 3. **Tunnel and deploy (M3-07 routing, M3-09):** README "Deploy": add a public hostname to your *existing* tunnel pointing at `http://sing_along_app:3100` (the app joins the external `proxy` network; no tunnel token, no second tunnel), fill `.env`, `docker compose up -d --build`. Then the M3-09 smoke test in `tasks/M3.md` (create project, upload, record and upload a take, play in sync, delete track, delete project; the bucket must be empty afterwards; mic prompt on the production origin; storage figure; desktop and iPhone).
 4. **Things no automated test covers:** how it sounds (sync, latency alignment, loop wrap), real microphones, iPhone and Safari, Bluetooth delay numbers, real-browser drag and drop feel, amber and red storage bar colors by eye, the crash page (`RouteError`).
