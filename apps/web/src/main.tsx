@@ -6,6 +6,7 @@ import { installGestureUnlock } from './audio/controller';
 import { AppProviders } from './providers';
 import './styles.css';
 import './panels.css';
+import './theme.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element missing');

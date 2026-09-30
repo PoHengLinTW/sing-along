@@ -158,6 +158,7 @@ export function UploadPanel({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drop target; the file input is the accessible path
     <section
+      id="upload-tracks"
       className="upload-panel"
       data-testid="drop-zone"
       onDragOver={(e) => e.preventDefault()}

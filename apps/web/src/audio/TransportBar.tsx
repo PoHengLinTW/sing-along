@@ -58,7 +58,7 @@ export function TransportBar({
         title={lockTitle('Restart (Home)')}
         onClick={() => ctl.restart()}
       >
-        ⏮
+        ↶
       </button>
       <button
         type="button"
@@ -67,7 +67,7 @@ export function TransportBar({
         title={lockTitle('Back 10 s (←)')}
         onClick={() => ctl.skip(-SKIP_SEC)}
       >
-        ⏪
+        ‹
       </button>
       <button
         type="button"
@@ -86,7 +86,7 @@ export function TransportBar({
         title={lockTitle('Forward 10 s (→)')}
         onClick={() => ctl.skip(SKIP_SEC)}
       >
-        ⏩
+        ›
       </button>
       <TimeDisplay transport={transport} />
       <LoopControls controller={ctl} transport={transport} locked={locked} />
@@ -142,7 +142,7 @@ function LoopControls({
         title={lockTitle('Loop between A and B')}
         onClick={() => controller.toggleLoop()}
       >
-        🔁
+        ↻
       </button>
       <button
         type="button"
@@ -151,7 +151,7 @@ function LoopControls({
         title={lockTitle('Clear the loop')}
         onClick={() => controller.clearLoop()}
       >
-        ✕
+        ×
       </button>
       {range && (
         <span className="loop-range" data-testid="loop-range">

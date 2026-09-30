@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) and **M2** (recording) are implemented and merged; the iPhone criteria of M2 are deferred by the user, and Bluetooth numbers plus desktop Safari / Android Chrome are still open (`tasks/M2.md`). **M3** (hardening and deploy) is built on branch `m3-hardening`: caps, storage meter, cap-aware UI, cleanup job, error/empty states, Docker image, compose stack, R2 docs and CORS check, and the Playwright suite. Still open in `tasks/M3.md`: the R2 bucket/token/alert and the real deploy with its smoke test (M3-08, M3-09 need the user's Cloudflare account and domain), and the E2E jobs have not run on GitHub yet. PWA (M4) is not built. Update this file as real code and commands land.
 
+**UI redesign:** branch `ui-studio-redesign` applies the user-approved dark studio mockup to the project library, page shell, player, mixer and timeline. It keeps the existing audio, recording, editing, upload and label flows. The local gate is green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (shared 38, API 141, web 594) and `pnpm e2e` (75 Chromium flows). The user is reviewing the live dev app before the branch is pushed or merged.
+
 ### Where things are (M1)
 
 - `apps/api/src`: `app.ts` (Fastify built from injected `{db, storage}`), `routes/` (projects, tracks, labels), `db/` (Drizzle schema, seed, repo queries), `storage/` (`Storage` interface + S3 impl), `config.ts` (zod-validated env), `errors.ts` (`{message, fields?}` error shape).
