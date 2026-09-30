@@ -26,6 +26,8 @@ interface Props {
   recording?: StoreApi<RecordingState>;
   /** Reload a track whose audio failed to download. */
   onRetryAudio?: (trackId: number) => void;
+  /** The studio places zoom beside the section heading so it stays visible on narrow screens. */
+  showZoomControls?: boolean;
 }
 
 type Gesture =
@@ -39,8 +41,29 @@ const CLICK_SLOP_PX = 4;
 export const LANE_HEIGHT = 168;
 export const LANE_MARGIN = 2;
 /** Height of the ruler including its border: the track panel column starts below it. */
-export const RULER_HEIGHT = 25;
+export const RULER_HEIGHT = 44;
 const ZOOM_STEP = 1.25;
+
+export function TimelineZoomControls({ view = viewStore }: { view?: StoreApi<ViewState> }) {
+  return (
+    <fieldset className="timeline-controls" aria-label="Timeline zoom">
+      <button
+        type="button"
+        aria-label="Zoom out"
+        onClick={() => view.setState({ pxPerSec: zoomBy(view.getState().pxPerSec, 1 / ZOOM_STEP) })}
+      >
+        −
+      </button>
+      <button
+        type="button"
+        aria-label="Zoom in"
+        onClick={() => view.setState({ pxPerSec: zoomBy(view.getState().pxPerSec, ZOOM_STEP) })}
+      >
+        +
+      </button>
+    </fieldset>
+  );
+}
 
 export function Timeline({
   tracks,
@@ -52,6 +75,7 @@ export function Timeline({
   live = liveWave,
   recording = recordingStore,
   onRetryAudio,
+  showZoomControls = true,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -66,7 +90,6 @@ export function Timeline({
   const loopA = useStore(transport, (s) => s.loopA);
   const region = preview ?? loop;
   const anchor = useRef<{ sec: number; x: number } | null>(null);
-  const programmatic = useRef<number | null>(null); // scrollLeft we set ourselves
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
 
   const isRecording = useStore(recording, (s) => s.status === 'recording');
@@ -101,10 +124,7 @@ export function Timeline({
           contentWidth: contentPx,
           playheadPx: x,
         });
-        if (next !== el.scrollLeft) {
-          programmatic.current = next;
-          el.scrollLeft = next;
-        }
+        if (next !== el.scrollLeft) el.scrollLeft = next;
       }
     };
     apply();
@@ -144,8 +164,6 @@ export function Timeline({
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    if (programmatic.current === el.scrollLeft) programmatic.current = null;
-    else view.setState({ follow: false }); // dragged the scrollbar / touch scroll
     setViewport({ left: el.scrollLeft, width: el.clientWidth });
   };
 
@@ -215,29 +233,15 @@ export function Timeline({
 
   return (
     <div className="timeline">
-      <div className="timeline-controls">
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() =>
-            view.setState({ pxPerSec: zoomBy(view.getState().pxPerSec, 1 / ZOOM_STEP) })
-          }
-        >
-          −
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => view.setState({ pxPerSec: zoomBy(view.getState().pxPerSec, ZOOM_STEP) })}
-        >
-          +
-        </button>
-      </div>
+      {showZoomControls && <TimelineZoomControls view={view} />}
       <div
         className="timeline-scroll"
         data-testid="timeline-scroll"
         ref={scroller}
         onScroll={onScroll}
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget) view.setState({ follow: false }); // scrollbar drag
+        }}
       >
         <div
           className="timeline-content"

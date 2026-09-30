@@ -1,6 +1,6 @@
-# Handover: M3 is built, waiting for the deploy and QA
+# Handover: M3 deploy and UI redesign review remain
 
-Written at the end of the M3 session (branch `m3-hardening`, 2026-09-29) for the next Claude session
+Updated on branch `ui-studio-redesign`, 2026-09-29, for the next coding session
 and for the user's QA. Read this after `CLAUDE.md` and before touching code. If something here
 disagrees with the code, the code wins: fix this file.
 
@@ -13,6 +13,9 @@ disagrees with the code, the code wins: fix this file.
 | M2 recording | Implemented, merged (PR #3). Desktop pass confirmed by the user; iPhone deferred by the user; Bluetooth numbers and desktop Safari / Android Chrome open (`tasks/M2.md`). |
 | M3 hardening and deploy | **M3-01 to M3-07 and M3-10 built**, one commit each on `m3-hardening` (pushed, PR #5). **M3-08 and M3-09 need the user** (Cloudflare account and domain). |
 | M4 PWA and mobile | Not started. Its E2E flows must be added to `e2e/` (CLAUDE.md rule). |
+| UI redesign | Implemented on local branch `ui-studio-redesign` from the approved HTML mockup; not pushed or merged. The user is reviewing it in the live dev app. |
+
+The redesign keeps the M1–M3 flows and uses a new `apps/web/src/theme.css` after the existing styles. The layout, library hero/cards, studio header, transport, microphone strip, panels, dialogs and waveform bars are updated. Timeline zoom lives beside the track heading on project pages so it remains visible on narrow screens. A follow fix keeps playback-driven scroll events from turning follow off; horizontal wheel input and scrollbar drags still turn it off. Local gate: `pnpm lint`, `pnpm typecheck`, `pnpm test` (38 shared, 141 API, 596 web), and the 14 player Chromium tests pass. The redesign passed `pnpm e2e` (75 Chromium) before the follow fix. Desktop and 390 px screenshots were inspected. The branch still needs the user's review of the follow fix, then push and PR.
 
 Gate at the end of the branch: `pnpm lint && pnpm typecheck && pnpm test` green (shared 38, api 141, web 591), and `pnpm e2e` green: 75 tests, three consecutive local runs. The `e2e` and `docker` CI jobs run on GitHub (PR #5): green three times in a row after one test fix. `main` requires only `check`; making `e2e` and `docker` required is the user's choice in branch protection.
 

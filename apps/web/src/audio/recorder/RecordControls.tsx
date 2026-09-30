@@ -93,7 +93,7 @@ export function RecordControls({
             ■ Stop <Elapsed transport={transport} recording={recording} />
           </>
         ) : (
-          '● Record'
+          '● Record take'
         )}
       </button>
       <button
@@ -109,7 +109,7 @@ export function RecordControls({
         disabled={!canMute}
         onClick={toggleMute}
       >
-        {muted ? '🎙 Muted' : '🎙 Mute'}
+        {muted ? 'Mic muted' : 'Mute mic'}
       </button>
     </>
   );

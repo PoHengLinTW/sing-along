@@ -60,6 +60,14 @@ const patches = (f: ReturnType<typeof vi.fn>) =>
     .map(([url, init]) => ({ url, body: JSON.parse((init as RequestInit).body as string) }));
 
 describe('project header: inline edit', () => {
+  it('keeps timeline zoom controls with the track heading', async () => {
+    setup(() => json(200, project()));
+    await screen.findByLabelText('Title');
+    const heading = document.querySelector('.workspace-heading');
+    expect(heading).toBeTruthy();
+    expect(within(heading as HTMLElement).getByRole('button', { name: 'Zoom in' })).toBeTruthy();
+  });
+
   const api = (_url: string, init?: RequestInit) => {
     if (init?.method === 'PATCH') return json(200, project(JSON.parse(init.body as string)));
     return json(200, project());

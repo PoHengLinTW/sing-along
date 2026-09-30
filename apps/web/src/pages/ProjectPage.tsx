@@ -18,7 +18,7 @@ import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
 import { useCaps } from '../lib/useStorageUsage';
-import { Timeline } from '../timeline/Timeline';
+import { Timeline, TimelineZoomControls } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
 import { EmptyProject } from './EmptyProject';
 import { LabelFilterBar } from './LabelFilterBar';
@@ -101,22 +101,28 @@ export function ProjectPage() {
   }
   if (!query.data || !project) return <p>Loading…</p>;
   return (
-    <section>
+    <section className="studio-page">
       <ProjectHeader project={query.data} />
       <TransportBar projectId={query.data.id} />
-      <MicSetup />
-      <LevelMeter />
+      <div className="input-strip">
+        <div className="input-strip-title">
+          <span className="input-icon" aria-hidden="true">
+            ♩
+          </span>
+          <strong>Microphone</strong>
+        </div>
+        <MicSetup />
+        <LevelMeter />
+      </div>
       <EncodeStatus />
-      <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
-      <p className="mix-actions">
-        <button
-          type="button"
-          title="Volume, mute and solo of every track back to 100% / off (this browser only)"
-          onClick={() => mixerStore.getState().reset()}
-        >
-          Reset mix
-        </button>
-      </p>
+      <div className="workspace-heading">
+        <div>
+          <h2>Tracks &amp; timeline</h2>
+          <p>Click a waveform to seek. Shape your mix with each track's controls.</p>
+        </div>
+        <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
+        <TimelineZoomControls />
+      </div>
       {project.tracks.length === 0 && drafts.length === 0 && <EmptyProject />}
       <div className="workspace">
         <TrackPanels
@@ -128,7 +134,22 @@ export function ProjectPage() {
           onDraftLatency={latency.setDraftLatency}
           onDraftUpload={uploadDraftTake}
         />
-        <Timeline tracks={visible} drafts={drafts} onRetryAudio={retryAudio} />
+        <Timeline
+          tracks={visible}
+          drafts={drafts}
+          onRetryAudio={retryAudio}
+          showZoomControls={false}
+        />
+      </div>
+      <div className="workspace-footer">
+        <span>Hidden tracks keep playing unless muted.</span>
+        <button
+          type="button"
+          title="Volume, mute and solo of every track back to 100% / off (this browser only)"
+          onClick={() => mixerStore.getState().reset()}
+        >
+          Reset mix
+        </button>
       </div>
       <UploadPanel projectId={query.data.id} trackCount={query.data.tracks.length} caps={caps} />
     </section>

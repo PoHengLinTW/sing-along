@@ -36,6 +36,21 @@ const item = (over = {}) => ({
 });
 
 describe('Home: project list', () => {
+  it('features the most recently updated project', async () => {
+    stubApi((url) =>
+      url === '/api/projects'
+        ? json(200, [
+            item({ id: 1, title: 'Older', updatedAt: '2026-01-01T00:00:00Z' }),
+            item({ id: 2, title: 'Newest', updatedAt: '2026-01-03T00:00:00Z' }),
+          ])
+        : json(404, { message: 'x' }),
+    );
+    renderHome();
+    const feature = await screen.findByRole('region', { name: 'Pick up where you left off' });
+    expect(within(feature).getByText('Newest')).toBeTruthy();
+    expect(within(feature).getByRole('button', { name: 'Open studio' })).toBeTruthy();
+  });
+
   it('shows title, artist, track count and relative time; clicking opens the project', async () => {
     stubApi((url) =>
       url === '/api/projects'

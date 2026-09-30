@@ -19,6 +19,17 @@ function renderAt(path: string) {
 }
 
 describe('routing', () => {
+  it('shows the studio shell with a working projects link', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(200, [])),
+    );
+    renderAt('/');
+    expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Your projects' }).getAttribute('href')).toBe('/');
+    expect(screen.getByRole('main')).toBeTruthy();
+  });
+
   it('shows a 404 page for unknown routes, with a link home', async () => {
     renderAt('/nope/nothing');
     expect(await screen.findByRole('heading', { name: /page not found/i })).toBeTruthy();
