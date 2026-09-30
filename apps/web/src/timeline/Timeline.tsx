@@ -90,7 +90,6 @@ export function Timeline({
   const loopA = useStore(transport, (s) => s.loopA);
   const region = preview ?? loop;
   const anchor = useRef<{ sec: number; x: number } | null>(null);
-  const programmatic = useRef<number | null>(null); // scrollLeft we set ourselves
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
 
   const isRecording = useStore(recording, (s) => s.status === 'recording');
@@ -125,10 +124,7 @@ export function Timeline({
           contentWidth: contentPx,
           playheadPx: x,
         });
-        if (next !== el.scrollLeft) {
-          programmatic.current = next;
-          el.scrollLeft = next;
-        }
+        if (next !== el.scrollLeft) el.scrollLeft = next;
       }
     };
     apply();
@@ -168,8 +164,6 @@ export function Timeline({
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    if (programmatic.current === el.scrollLeft) programmatic.current = null;
-    else view.setState({ follow: false }); // dragged the scrollbar / touch scroll
     setViewport({ left: el.scrollLeft, width: el.clientWidth });
   };
 
@@ -245,6 +239,9 @@ export function Timeline({
         data-testid="timeline-scroll"
         ref={scroller}
         onScroll={onScroll}
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget) view.setState({ follow: false }); // scrollbar drag
+        }}
       >
         <div
           className="timeline-content"

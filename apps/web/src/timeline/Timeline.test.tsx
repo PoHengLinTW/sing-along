@@ -250,6 +250,21 @@ describe('auto-follow', () => {
     expect(scroller().scrollLeft).toBe(850);
   });
 
+  it('keeps following when scroll events from playback arrive after the next position update', () => {
+    view.setState({ pxPerSec: 100 });
+    setup([track(1, { durationMs: 60_000 })]);
+    viewport(1000);
+    act(() => transport.setState({ playing: true, duration: 60, position: 9.5 }));
+    expect(scroller().scrollLeft).toBe(850);
+    // Browsers may deliver a scroll event after playback has already moved the element again.
+    act(() => transport.setState({ position: 18 }));
+    expect(scroller().scrollLeft).toBe(1700);
+    fireEvent.scroll(scroller(), { target: { scrollLeft: 850 } });
+    expect(view.getState().follow).toBe(true);
+    act(() => transport.setState({ position: 28 }));
+    expect(scroller().scrollLeft).toBe(2700);
+  });
+
   it('stops following once the user scrolls away, and resumes on the next seek', () => {
     view.setState({ pxPerSec: 100 });
     setup([track(1, { durationMs: 60_000 })]);
@@ -261,6 +276,16 @@ describe('auto-follow', () => {
     fireEvent.pointerDown(screen.getByTestId('lane-1'), { clientX: 300, buttons: 1 }); // a seek re-enables follow
     act(() => transport.setState({ position: 12 }));
     expect(scroller().scrollLeft).toBeGreaterThan(0);
+  });
+
+  it('stops following when the user drags the scrollbar', () => {
+    view.setState({ pxPerSec: 100 });
+    setup([track(1, { durationMs: 60_000 })]);
+    viewport(1000);
+    fireEvent.pointerDown(scroller(), { buttons: 1 });
+    expect(view.getState().follow).toBe(false);
+    act(() => transport.setState({ playing: true, duration: 60, position: 18 }));
+    expect(scroller().scrollLeft).toBe(0);
   });
 
   it('does not scroll while paused', () => {
