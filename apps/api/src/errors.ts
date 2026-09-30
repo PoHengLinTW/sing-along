@@ -1,12 +1,14 @@
-import type { ApiError } from '@sing-along/shared';
+import type { ApiError, ErrorCode } from '@sing-along/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodType } from 'zod';
+import { wantsSpaShell } from './web-static';
 
 export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
     readonly fields?: Record<string, string>,
+    readonly code?: ErrorCode,
   ) {
     super(message);
   }
@@ -32,12 +34,14 @@ export function parseId(raw: unknown): number {
   return Number(raw);
 }
 
-export function registerErrorHandler(app: FastifyInstance) {
+/** `spaFallback`: unknown page URLs get index.html (client-side routes) instead of a JSON 404. */
+export function registerErrorHandler(app: FastifyInstance, opts: { spaFallback?: boolean } = {}) {
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) {
       const body: ApiError = {
         message: err.message,
         ...(err.fields ? { fields: err.fields } : {}),
+        ...(err.code ? { code: err.code } : {}),
       };
       return reply.status(err.status).send(body);
     }
@@ -45,12 +49,15 @@ export function registerErrorHandler(app: FastifyInstance) {
     if (status && status >= 400 && status < 500) {
       return reply.status(status).send({ message: (err as Error).message } satisfies ApiError);
     }
-    req.log.error(err);
+    req.log.error({ err, method: req.method, url: req.url }, 'unhandled error');
     return reply
       .status(500)
       .send({ message: 'Something went wrong on the server.' } satisfies ApiError);
   });
-  app.setNotFoundHandler((_req, reply) =>
-    reply.status(404).send({ message: 'Not found' } satisfies ApiError),
-  );
+  app.setNotFoundHandler((req, reply) => {
+    if (opts.spaFallback && wantsSpaShell(req.method, req.url)) {
+      return reply.status(200).sendFile('index.html');
+    }
+    return reply.status(404).send({ message: 'Not found' } satisfies ApiError);
+  });
 }

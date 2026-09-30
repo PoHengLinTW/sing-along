@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ERROR_CODES } from './caps';
 
 const TITLE_MAX = 200;
 const ARTIST_MAX = 200;
@@ -79,5 +80,6 @@ export type ProjectDetail = z.infer<typeof projectDetailSchema>;
 export const apiErrorSchema = z.object({
   message: z.string(),
   fields: z.record(z.string(), z.string()).optional(),
+  code: z.enum(ERROR_CODES).optional(),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;

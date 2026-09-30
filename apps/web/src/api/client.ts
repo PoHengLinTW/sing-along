@@ -1,10 +1,11 @@
-import type { ApiError } from '@sing-along/shared';
+import type { ApiError, ErrorCode } from '@sing-along/shared';
 
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number, // 0 = the server could not be reached
     message: string,
     readonly fields?: Record<string, string>,
+    readonly code?: ErrorCode,
   ) {
     super(message);
   }
@@ -42,6 +43,7 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {})
       res.status,
       body.message ?? `Request failed (${res.status})`,
       body.fields,
+      body.code,
     );
   }
   if (res.status === 204) return undefined as T;

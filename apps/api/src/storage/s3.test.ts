@@ -2,6 +2,7 @@ import {
   CreateBucketCommand,
   DeleteObjectsCommand,
   HeadBucketCommand,
+  type ListObjectsV2Command,
   type S3Client,
 } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
@@ -16,11 +17,16 @@ const cfg = {
   forcePathStyle: true,
 };
 
-function fakeClient() {
+function fakeClient(reply: (cmd: unknown, n: number) => unknown = () => ({})) {
   const sent: unknown[] = [];
   return {
     sent,
-    client: { send: async (cmd: unknown) => void sent.push(cmd) } as unknown as S3Client,
+    client: {
+      send: async (cmd: unknown) => {
+        sent.push(cmd);
+        return reply(cmd, sent.length);
+      },
+    } as unknown as S3Client,
   };
 }
 
@@ -46,6 +52,48 @@ describe('S3Storage.deleteObjects (mocked client)', () => {
       Array.from({ length: 2500 }, (_, i) => `k${i}`),
     );
     expect(f.sent).toHaveLength(3);
+  });
+});
+
+describe('S3Storage.deleteObjects failures', () => {
+  it('throws when storage reports per-key errors (Quiet mode does not throw on its own)', async () => {
+    const f = fakeClient(() => ({ Errors: [{ Key: 'a', Code: 'AccessDenied' }] }));
+    await expect(new S3Storage(f.client, 'bkt').deleteObjects(['a'])).rejects.toThrow(/a/);
+  });
+});
+
+describe('S3Storage.list (mocked client)', () => {
+  it('follows continuation tokens and maps size and modified time', async () => {
+    const f = fakeClient((_cmd, n) =>
+      n === 1
+        ? {
+            Contents: [
+              { Key: 'projects/1/a.flac', Size: 10, LastModified: new Date('2026-01-01') },
+            ],
+            IsTruncated: true,
+            NextContinuationToken: 'tok',
+          }
+        : {
+            Contents: [
+              { Key: 'projects/1/b.flac', Size: 20, LastModified: new Date('2026-01-02') },
+            ],
+            IsTruncated: false,
+          },
+    );
+    const out = await new S3Storage(f.client, 'bkt').list('projects/');
+    expect(out).toEqual([
+      { key: 'projects/1/a.flac', sizeBytes: 10, lastModified: new Date('2026-01-01') },
+      { key: 'projects/1/b.flac', sizeBytes: 20, lastModified: new Date('2026-01-02') },
+    ]);
+    const first = f.sent[0] as ListObjectsV2Command;
+    const second = f.sent[1] as ListObjectsV2Command;
+    expect(first.input).toMatchObject({ Bucket: 'bkt', Prefix: 'projects/' });
+    expect(second.input.ContinuationToken).toBe('tok');
+  });
+
+  it('returns an empty list for an empty bucket', async () => {
+    const f = fakeClient(() => ({ IsTruncated: false }));
+    expect(await new S3Storage(f.client, 'bkt').list('projects/')).toEqual([]);
   });
 });
 
@@ -112,5 +160,21 @@ describe.skipIf(!(await s3Reachable()))('S3Storage against the S3 stand-in', () 
     expect((await get.arrayBuffer()).byteLength).toBe(1000);
     await storage.deleteObjects([key]);
     expect(await storage.head(key)).toBeNull();
+  });
+
+  it('lists objects under a prefix with size and modified time', async () => {
+    const listKey = `it-list/${Date.now()}.flac`;
+    const url = await storage.presignPut({
+      key: listKey,
+      contentType: 'audio/flac',
+      sizeBytes: 500,
+      expiresInSec: 60,
+    });
+    expect((await put(url, 500)).status).toBe(200);
+    const found = (await storage.list('it-list/')).find((o) => o.key === listKey);
+    expect(found).toMatchObject({ key: listKey, sizeBytes: 500 });
+    expect(found?.lastModified).toBeInstanceOf(Date);
+    expect((await storage.list('nothing-here/')).length).toBe(0);
+    await storage.deleteObjects([listKey]);
   });
 });

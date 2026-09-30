@@ -1,6 +1,9 @@
 import { buildApp } from './app';
+import { runCleanup } from './cleanup';
+import { scheduleCleanup } from './cleanup-schedule';
 import { type Config, ConfigError, loadConfig } from './config';
 import { createDb } from './db/client';
+import { migrateAndSeed } from './db/setup';
 import { createS3Client, S3Storage } from './storage/s3';
 
 let config: Config;
@@ -14,10 +17,46 @@ try {
   throw err;
 }
 
-const { db } = createDb(config.databaseUrl);
+const { db, pool } = createDb(config.databaseUrl);
+
+// Schema first: the server must not accept requests against an old schema.
+try {
+  await migrateAndSeed(db, config.migrationsDir);
+} catch (err) {
+  console.error('Database migration failed:', err);
+  process.exit(1);
+}
+
 const storage = new S3Storage(createS3Client(config.s3), config.s3.bucket);
-const app = buildApp({ db, storage, presignTtlSec: config.presignTtlSec });
+const app = buildApp({
+  db,
+  storage,
+  presignTtlSec: config.presignTtlSec,
+  caps: config.caps,
+  webDir: config.webDir,
+  logger: { level: 'error' }, // unexpected errors and failed storage deletes; not every request
+});
+const cleanup = scheduleCleanup(
+  config.cleanupCron,
+  () => runCleanup({ db, storage, log: { info: (m) => console.log(m) } }),
+  { error: (m) => console.error(m) },
+);
+if (cleanup)
+  console.log(
+    `Cleanup scheduled (${config.cleanupCron}); next run ${cleanup.nextRun()?.toISOString()}`,
+  );
+
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+// `docker stop` sends SIGTERM: finish in-flight requests, then release the database.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, async () => {
+    cleanup?.stop();
+    await app.close();
+    await pool.end();
+    process.exit(0);
+  });
+}

@@ -55,10 +55,11 @@ const controller = {
   adjustLoopEdge: vi.fn(),
 };
 
-function setup(tracks: TrackDto[]) {
+function setup(tracks: TrackDto[], onRetryAudio?: (id: number) => void) {
   return render(
     <Timeline
       tracks={tracks}
+      onRetryAudio={onRetryAudio}
       controller={controller as never}
       transport={transport}
       view={view}
@@ -129,8 +130,22 @@ describe('lanes', () => {
     status.setState({ byId: { 1: 'error' } });
     setup([track(1)]);
     expect(within(screen.getByTestId('lane-1')).getByRole('status').textContent).toMatch(
-      /couldn't load/i,
+      /failed to load audio/i,
     );
+  });
+
+  it('offers a Retry on a failed lane that reloads only that track, without seeking', () => {
+    status.setState({ byId: { 1: 'error', 2: 'ready' } });
+    const retry = vi.fn();
+    setup([track(1), track(2)], retry);
+    const button = within(screen.getByTestId('lane-1')).getByRole('button', { name: /retry/i });
+    fireEvent.pointerDown(button);
+    fireEvent.click(button);
+    expect(retry).toHaveBeenCalledWith(1);
+    expect(controller.seek).not.toHaveBeenCalled();
+    expect(
+      within(screen.getByTestId('lane-2')).queryByRole('button', { name: /retry/i }),
+    ).toBeNull();
   });
 
   it('updates the waveform zoom when the zoom level changes', () => {

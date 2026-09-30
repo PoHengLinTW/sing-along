@@ -1,3 +1,4 @@
+import { DEFAULT_CAPS } from '@sing-along/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { type UploadDeps, uploadTrack } from './upload';
 
@@ -142,5 +143,30 @@ describe('uploadTrack', () => {
     abort.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls.some((c) => c.includes('/confirm'))).toBe(false);
+  });
+});
+
+describe('uploadTrack caps', () => {
+  it('refuses audio longer than the cap before asking the server for a URL', async () => {
+    const { d, calls } = deps({
+      decode: async () => ({ durationSec: 601, sampleRate: 1, channels: [new Float32Array(601)] }),
+    });
+    await expect(
+      uploadTrack(d, { projectId: 5, file: file(), form, caps: DEFAULT_CAPS }),
+    ).rejects.toThrow('Too long (limit 10 minutes).');
+    expect(calls.filter((c) => c.startsWith('api'))).toEqual([]);
+  });
+
+  it('refuses an oversized file before decoding it', async () => {
+    const { d, calls } = deps();
+    await expect(
+      uploadTrack(d, {
+        projectId: 5,
+        file: file('big.wav', 'audio/wav', 61 * 1024 * 1024),
+        form,
+        caps: DEFAULT_CAPS,
+      }),
+    ).rejects.toThrow('Convert to FLAC or MP3');
+    expect(calls).toEqual([]);
   });
 });

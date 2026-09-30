@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) is implemented: project/track/label API, direct-to-storage upload, waveform view, mixer, transport, A–B loop, labels UI, per-browser mix. **M2** (recording) is implemented (branch `m2-recording`, PR #3) and its desktop device pass is confirmed; the iPhone criteria are deferred by the user, and Bluetooth numbers plus desktop Safari / Android Chrome are still open (see `tasks/M2.md`). Caps/deploy (M3) and PWA (M4) are not built yet. Update this file as real code and commands land.
+**M0** (audio spike, `spike/`) has 11 of 32 acceptance criteria checked. Device and listening checks remain open (see `tasks/M0.md` and `spike/SPIKE_NOTES.md`). **M1** (core player) and **M2** (recording) are implemented and merged; the iPhone criteria of M2 are deferred by the user, and Bluetooth numbers plus desktop Safari / Android Chrome are still open (`tasks/M2.md`). **M3** (hardening and deploy) is built on branch `m3-hardening`: caps, storage meter, cap-aware UI, cleanup job, error/empty states, Docker image, compose stack, R2 docs and CORS check, and the Playwright suite. Still open in `tasks/M3.md`: the R2 bucket/token/alert and the real deploy with its smoke test (M3-08, M3-09 need the user's Cloudflare account and domain), and the E2E jobs have not run on GitHub yet. PWA (M4) is not built. Update this file as real code and commands land.
 
 ### Where things are (M1)
 
@@ -24,6 +24,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Latency offsets are edited through `audio/latency.ts` (pending values applied to tracks and drafts at once, saved after 500 ms: PATCH for tracks, IndexedDB for drafts).
 - `POST /api/projects/:id/tracks/upload-url` takes an optional `latencyOffsetMs`; a draft uploads with `source = 'recording'` through `uploadPrepared` (`api/upload.ts`).
 - Real-browser probes for M2 live in `spike/probe/` (`m2-record-smoke.mjs` drives the whole flow with Chromium's fake microphone against the dev stack; it needs `pnpm dev`, and Vite may pick a port other than 5173: pass `BASE`). Vitest's fake-indexeddb drops jsdom's `Blob`: seed test drafts with `node:buffer`'s `Blob` if a test reads them back.
+
+### Where things are (M3)
+
+- `packages/shared/src/caps.ts`: `DEFAULT_CAPS`, `ErrorCode`s, `storageUsageSchema`, `formatBytes`. The API reads overrides from env (`MAX_FILE_MB`, ...); the client learns the live caps from `GET /api/storage` (`useCaps`).
+- `apps/api/src`: `db/caps.ts` (one advisory lock around every cap check + insert), `caps-messages.ts` (the user-facing text of each rejection), `routes/storage.ts`, `cleanup.ts` + `cleanup-schedule.ts` + `cleanup-cli.ts` (orphan/pending cleanup), `web-static.ts` (SPA serving and cache headers), `cors-check.ts` + `cors-check-cli.ts`, `db/setup.ts` (`migrateAndSeed`, run at server start), `build.mjs` (esbuild bundles for the image).
+- `apps/web/src`: `pages/StorageMeter.tsx`, `lib/caps.ts`, `lib/useStorageUsage.ts` (`useCaps`), `pages/EmptyProject.tsx`, `pages/RouteError.tsx`, `lib/LabelsLoadError.tsx`. The storage query is keyed `['projects','storage']` on purpose (see `CONCLUDE.md` Q22).
+- Deploy: `Dockerfile` (bundled API, no `node_modules`, uid 1000), `docker-compose.yml` (postgres and app; no host ports; the app joins the external `proxy` network of the user's existing cloudflared tunnel as `sing_along_app:3100`), `.env.production.example`, `deploy/r2-cors.json`. README has "Deploy" and "R2 setup".
+- `e2e/`: Playwright (`pnpm e2e` builds, then runs). `start-server.mjs` recreates the `singalong_e2e` database and `sing-along-e2e` bucket and starts the built server on port 3300; specs are in `e2e/tests/`, helpers in `e2e/support/`. Needs the dev compose stack. Selector gotchas: `.upload-items > li` (the label picker has nested `li`), `getByRole` names match by substring (use `exact: true` for "Mute all X" vs "Unmute all X"), Chromium's fake microphones get new device ids on every page load.
 
 ## Handover (read this first in a new session)
 
@@ -59,9 +67,9 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
 - **Tracks can't be changed after upload.** A new take means a new track. The audio cache (Cache API) is keyed by **track ID**, not by presigned URL, and depends on this.
 - **Mixer state** (volume, mute, solo, zoom) lives only in each browser's localStorage and is never sent to the server.
 - **Caps** (enforced on the server, set by env vars): 60 MB per file, 10 min per track, 10 tracks per project, 100 projects, an 8 GB global total (active + pending sizes). Nothing is ever removed automatically to make room.
-- **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres + cloudflared (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).
+- **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres, reached through the user's existing cloudflared tunnel (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).
 
-## Commands (`pnpm cleanup` is still planned, M3)
+## Commands
 
 ```bash
 pnpm dev                                        # web + api; web proxies /api
@@ -69,7 +77,10 @@ pnpm lint && pnpm typecheck && pnpm test        # CI runs these (lint = Biome; T
 pnpm --filter <web|api|shared> exec vitest run <file>   # single test file (Vitest)
 docker compose -f docker-compose.dev.yml up     # local Postgres + RustFS (S3)
 pnpm db:generate && pnpm db:migrate             # Drizzle migrations
-pnpm cleanup --dry-run                          # orphan/pending storage cleanup preview
+pnpm cleanup --dry-run                          # orphan/pending storage cleanup preview (drop --dry-run to delete)
+pnpm build                                      # production build of web + api (the Docker image does this)
+pnpm e2e                                        # build, then Playwright against the compose stack (see e2e/)
+pnpm check:cors                                 # real CORS preflights against the configured bucket
 ```
 
 The M0 spike lives in `spike/` (Vite + vanilla TS, served over HTTPS on the LAN for iPhone mic testing). It's **throwaway**, and its findings go in `spike/SPIKE_NOTES.md`.
@@ -83,7 +94,7 @@ The M0 spike lives in `spike/` (Vite + vanilla TS, served over HTTPS on the LAN 
   - Any decision that changes the plan also goes in `PRD.md` / `CONCLUDE.md` in the same commit (see the drift rule above).
   - Follow the attribution lines the harness specifies for commits.
 - **Branch and PR.** `main` is protected on GitHub: nothing is pushed to it directly, not even by admins. Work on a branch (e.g. `m2-recording`, one per milestone or chore), keep one commit per task, push, and open a PR. The `check` job (lint, typecheck, test) must be green and the branch up to date with `main` before it can merge. Pull the merged `main` before starting the next branch.
-- **E2E from M3 on.** Before M3 and M4 are closed, add Playwright E2E tests covering **every user flow** the milestone delivers (not just smoke flows), and run them green. The final task of the milestone is "E2E for M<n> user flows". List the flows in that task, then map each flow to a test. A milestone with a user flow that has no E2E test is not done.
+- **E2E from M3 on.** Before M3 and M4 are closed, add Playwright E2E tests covering **every user flow** the milestone delivers (not just smoke flows), and run them green. The final task of the milestone is "E2E for M<n> user flows". List the flows in that task, then map each flow to a test. A milestone with a user flow that has no E2E test is not done. (M3-10 is built: 75 tests in `e2e/`, mapped in `tasks/M3.md`. M4 must add its flows there.)
   - M0, M1 and M2 have **no E2E requirement**. They rely on unit/integration tests (TDD) and manual checks. M3's E2E suite must still cover the user flows delivered in M1 and M2, since M3 is where the suite is first built.
   - M0 is a throwaway spike. Record its findings in `spike/SPIKE_NOTES.md`.
   - E2E runs against the Compose stack (Postgres + RustFS). Use Chromium's fake media device flags for mic flows. Real-device audio checks stay manual.

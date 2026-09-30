@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-export const healthResponseSchema = z.object({ status: z.literal('ok') });
+export const healthResponseSchema = z.object({ status: z.enum(['ok', 'unavailable']) });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+export * from './caps';
 export * from './projects';
 export * from './tracks';

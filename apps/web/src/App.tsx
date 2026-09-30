@@ -2,6 +2,7 @@ import { createBrowserRouter, createMemoryRouter, Link, Outlet } from 'react-rou
 import { Home } from './pages/Home';
 import { NotFound } from './pages/NotFound';
 import { ProjectPage } from './pages/ProjectPage';
+import { RouteError } from './pages/RouteError';
 
 function Layout() {
   return (
@@ -19,6 +20,7 @@ function Layout() {
 const routes = [
   {
     element: <Layout />,
+    errorElement: <RouteError />,
     children: [
       { path: '/', element: <Home /> },
       { path: '/project/:id', element: <ProjectPage /> },

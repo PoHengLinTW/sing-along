@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
     "start": "tsx --env-file-if-exists=../../.env src/server.ts",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "cleanup": "tsx --env-file-if-exists=../../.env src/cleanup-cli.ts",
+    "check:cors": "tsx --env-file-if-exists=../../.env src/cors-check-cli.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=../../.env src/db/migrate.ts"
   },
@@ -14,12 +17,15 @@
     "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1142.0",
     "@aws-sdk/s3-request-presigner": "^3.1142.0",
+    "@fastify/static": "^10.1.5",
     "@sing-along/shared": "workspace:*",
+    "croner": "^10.0.1",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
     "pg": "^8.23.0",

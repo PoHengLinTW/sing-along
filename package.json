@@ -8,10 +8,14 @@
   "packageManager": "pnpm@10.28.1",
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @sing-along/api dev\" \"pnpm --filter @sing-along/web dev\"",
+    "build": "pnpm --filter @sing-along/web build && pnpm --filter @sing-along/api build",
+    "e2e": "pnpm build && pnpm --filter @sing-along/e2e e2e",
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
+    "cleanup": "pnpm --filter @sing-along/api cleanup",
+    "check:cors": "pnpm --filter @sing-along/api check:cors",
     "db:generate": "pnpm --filter @sing-along/api db:generate",
     "db:migrate": "pnpm --filter @sing-along/api db:migrate"
   },

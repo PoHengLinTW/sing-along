@@ -3,7 +3,7 @@ import { createBufferLoader } from './loadTrackBuffer';
 
 const setup = (over: { ok?: boolean } = {}) => {
   const api = vi.fn(async () => ({ url: 'https://s3/get', expiresAt: '' }));
-  const download = vi.fn(async () =>
+  const download = vi.fn(async (_url: string) =>
     over.ok === false ? new Response('no', { status: 403 }) : new Response(new ArrayBuffer(4)),
   );
   const decode = vi.fn(async () => ({ duration: 3 }) as unknown as AudioBuffer);
@@ -38,5 +38,35 @@ describe('createBufferLoader', () => {
     await expect(s.load(7)).rejects.toThrow(/403/);
     s.download.mockResolvedValueOnce(new Response(new ArrayBuffer(4)));
     await expect(s.load(7)).resolves.toBeTruthy();
+  });
+});
+
+describe('createBufferLoader: expired presigned URLs', () => {
+  const fresh = () => new Response(new ArrayBuffer(4));
+
+  it('asks for a fresh URL and retries once when the download is refused (expired signature)', async () => {
+    const s = setup();
+    s.api
+      .mockResolvedValueOnce({ url: 'https://s3/old', expiresAt: '' })
+      .mockResolvedValueOnce({ url: 'https://s3/new', expiresAt: '' });
+    s.download
+      .mockResolvedValueOnce(new Response('expired', { status: 403 }))
+      .mockResolvedValueOnce(fresh());
+    await expect(s.load(7)).resolves.toBeTruthy();
+    expect(s.api).toHaveBeenCalledTimes(2);
+    expect(s.download.mock.calls.map((c) => c[0])).toEqual(['https://s3/old', 'https://s3/new']);
+  });
+
+  it('gives up after that one retry', async () => {
+    const s = setup({ ok: false });
+    await expect(s.load(7)).rejects.toThrow(/403/);
+    expect(s.download).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([404, 500, 503])('does not retry a %s (a fresh URL would not help)', async (status) => {
+    const s = setup();
+    s.download.mockResolvedValue(new Response('x', { status }));
+    await expect(s.load(7)).rejects.toThrow(String(status));
+    expect(s.download).toHaveBeenCalledTimes(1);
   });
 });

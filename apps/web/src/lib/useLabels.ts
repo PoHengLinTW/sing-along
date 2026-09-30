@@ -18,5 +18,10 @@ export function useLabels() {
     return label;
   };
 
-  return { labels: query.data ?? NONE, create };
+  return {
+    labels: query.data ?? NONE,
+    create,
+    isError: query.isError,
+    retry: () => void query.refetch(),
+  };
 }

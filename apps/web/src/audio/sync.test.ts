@@ -74,6 +74,23 @@ describe('AudioSync', () => {
     expect(ctx.load).toHaveBeenCalledTimes(2);
   });
 
+  it('retry(id) reloads a track that failed, and ignores tracks that are loading or ready', async () => {
+    ctx.sync.sync([track(1), track(2)]);
+    ctx.pending.get(1)?.reject(new Error('boom'));
+    await flush();
+    ctx.sync.retry(1);
+    expect(ctx.status.getState().byId[1]).toBe('loading');
+    expect(ctx.load).toHaveBeenCalledTimes(3); // 1, 2, then 1 again
+    ctx.sync.retry(2); // still loading: no second download
+    expect(ctx.load).toHaveBeenCalledTimes(3);
+    ctx.pending.get(1)?.resolve(buf());
+    await flush();
+    expect(ctx.controller.addTrack).toHaveBeenCalledTimes(1);
+    expect(ctx.status.getState().byId[1]).toBe('ready');
+    ctx.sync.retry(1); // ready: nothing to do
+    expect(ctx.load).toHaveBeenCalledTimes(3);
+  });
+
   it('removes tracks that disappeared from the project', async () => {
     ctx.sync.sync([track(1), track(2)]);
     ctx.pending.get(1)?.resolve(buf());

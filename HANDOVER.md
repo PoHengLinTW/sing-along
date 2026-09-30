@@ -1,67 +1,62 @@
-# Handover: M2 is built and in review (PR #3)
+# Handover: M3 is built, waiting for the deploy and QA
 
-Written at the end of the M2 session (branch `m2-recording`, 2026-09-28) for the next Claude session.
-Read this after `CLAUDE.md` and before touching code. If something here disagrees with the code,
-the code wins: fix this file.
+Written at the end of the M3 session (branch `m3-hardening`, 2026-09-29) for the next Claude session
+and for the user's QA. Read this after `CLAUDE.md` and before touching code. If something here
+disagrees with the code, the code wins: fix this file.
 
 ## 1. Where the project stands
 
 | Milestone | State |
 |---|---|
-| M0 spike (`spike/`) | Work continued in the `m0-completion` worktree (merged as PR #4). **11 of 32 acceptance criteria ticked** in `tasks/M0.md`; real-device and listening checks remain. Verdict in `spike/SPIKE_NOTES.md` is a *conditional* go. |
-| M1 core player | Implemented. 78 of 87 criteria ticked in `tasks/M1.md`; each unticked one has an `_(open: ...)_` note. Merged to `main`. |
-| M2 recording | **Implemented and in review: PR #3** (`m2-recording` → `main`, `check` job green; check whether it has been merged). M2-01 to M2-10 are one commit each. **M2-11 desktop pass: confirmed by the user.** Still open in `tasks/M2.md`, each with an `_(open/Deferred: ...)_` note: the iPhone criteria (deferred by the user), Bluetooth delay numbers, and the desktop Safari / Android Chrome leg. |
-| M3, M4 | Not started. E2E (Playwright) is first required in M3 and must cover the M1 and M2 user flows. |
+| M0 spike (`spike/`) | 11 of 32 criteria ticked in `tasks/M0.md`; device and listening checks remain. Conditional go (`spike/SPIKE_NOTES.md`). |
+| M1 core player | Implemented, merged. |
+| M2 recording | Implemented, merged (PR #3). Desktop pass confirmed by the user; iPhone deferred by the user; Bluetooth numbers and desktop Safari / Android Chrome open (`tasks/M2.md`). |
+| M3 hardening and deploy | **M3-01 to M3-07 and M3-10 built**, one commit each on `m3-hardening` (pushed, PR #5). **M3-08 and M3-09 need the user** (Cloudflare account and domain). |
+| M4 PWA and mobile | Not started. Its E2E flows must be added to `e2e/` (CLAUDE.md rule). |
 
-Gate at the end of the branch (and CI on the PR): `pnpm lint && pnpm typecheck && pnpm test` green (shared 31, api 66, web 543).
+Gate at the end of the branch: `pnpm lint && pnpm typecheck && pnpm test` green (shared 38, api 141, web 591), and `pnpm e2e` green: 75 tests, three consecutive local runs. The `e2e` and `docker` CI jobs run on GitHub (PR #5): green three times in a row after one test fix. `main` requires only `check`; making `e2e` and `docker` required is the user's choice in branch protection.
 
-## 2. How we work (rules that were enforced, not just written)
+## 2. How we work
 
-- `CLAUDE.md` is the source of truth for the process: **TDD** (failing tests first), **one commit per task** (subject `M2-03: ...`, body = design decisions), `main` is protected (branch, push, PR, green `check` job), gate every commit with `pnpm lint && pnpm typecheck && pnpm test`.
-- When a decision changes, update `PRD.md`, `CONCLUDE.md` (latest entry is **Q21**, M2 decisions) and the task's criteria together. Tick a `- [ ]` only when verified; use `_(open: ...)_` for what is missing.
-- Commit messages: write the body to a file in the scratchpad and use `git commit -F <file>` (see gotchas).
+Unchanged (see `CLAUDE.md`): TDD, one commit per task with the design decisions in the body, `main` is protected (branch, push, PR, green `check`). Decisions go to `CONCLUDE.md` (latest: **Q22**, all M3 decisions) and the task's criteria. Commit messages: write the body to a file in the scratchpad and `git commit -F`.
 
-## 3. What M2 delivered (short map; details in `CLAUDE.md` "Where things are (M2)")
+## 3. What only the user can do (the QA list)
 
-Mic setup and permission errors, input picker, headphone hint → AudioWorklet capture on the playback clock → chunks to IndexedDB every ~1 s → live lane and level meter (also as an input check before recording) → FLAC/WAV encode in a worker → dashed Draft lanes with mix, rename, discard → live latency offset (±1000 ms) with a 4 s loop preview → upload as a `recording` track (with `latencyOffsetMs`) → `R`/`M` shortcuts, mic mute, "Leave site?" guard, crash recovery of cut-short takes. API change: `upload-url` accepts `latencyOffsetMs`.
+1. **Review and merge PR #5** (`m3-hardening`); all three CI jobs are green.
+2. **R2 (M3-08):** README "R2 setup": enable R2 (payment method needed), create the bucket, a bucket-scoped Object Read & Write token, paste `deploy/r2-cors.json` with the real origin, set a billing alert (dashboard label may differ from the README wording), then run `pnpm check:cors`. The tool was only run against the dev store.
+3. **Tunnel and deploy (M3-07 routing, M3-09):** README "Deploy": add a public hostname to your *existing* tunnel pointing at `http://sing_along_app:3100` (the app joins the external `proxy` network; no tunnel token, no second tunnel), fill `.env`, `docker compose up -d --build`. Then the M3-09 smoke test in `tasks/M3.md` (create project, upload, record and upload a take, play in sync, delete track, delete project; the bucket must be empty afterwards; mic prompt on the production origin; storage figure; desktop and iPhone).
+4. **Things no automated test covers:** how it sounds (sync, latency alignment, loop wrap), real microphones, iPhone and Safari, Bluetooth delay numbers, real-browser drag and drop feel, amber and red storage bar colors by eye, the crash page (`RouteError`).
 
-Verified in a real browser (Chromium 145, fake microphone, dev stack; probes in `spike/probe/`): `m2-record-smoke.mjs` 24/24 (record over a track, live lane painted, mute, stop, real FLAC worker, draft, latency, upload, server row has FLAC + `latencyOffsetMs -50`, crash recovery), `m2-take-length.mjs` (60 s take = 59 996 ms), `m2-encode-worker.mjs` (built worker in Chromium/Firefox/WebKit, 4 min take encodes in 0.5-0.7 s, FLAC decodes).
+## 4. What M3 delivered (map in `CLAUDE.md` "Where things are (M3)")
 
-## 4. What is verified, what is not, and honest limits
+Server-side caps with codes and one advisory lock (413/422/409/507, project cap 409); `GET /api/storage` and the home meter; client checks against the live caps, disabled upload at 10 tracks and Create at 100 projects; nightly cleanup (croner, `pnpm cleanup [--dry-run]`); Retry states for every fetch, per-track audio Retry, one automatic refresh of an expired signed URL, empty-project actions, route error page, API error logging; a 258 MB non-root image with migrations at start and `/api/health` 200/503; compose stack (postgres + app, no host ports, joins the user's external `proxy` network); R2 docs, CORS policy and `check:cors`; the Playwright suite.
 
-- The user ran the M2-11 checklist on **desktop** and reported it all fine (devices not itemised, so only desktop-settled criteria were ticked). The checklist stays in `tasks/M2.md` if a re-run is wanted.
-- **iPhone is out of scope for now (user decision, 2026-09-28).** The iPhone criteria in `tasks/M2.md` are marked deferred, not passed; M3/M4 must not assume they were verified. Note that testing on a phone would need HTTPS and phone-reachable storage URLs (dev presigned URLs point at `localhost:9000`); that comes with M3's deploy.
-- Still open and wanted: Bluetooth delay numbers for the README "Known issues"; desktop Safari and Android Chrome record → upload → play.
-- Never verified on real hardware: mic capture on iPhone/desktop Safari, iPhone CPU while recording with the live waveform, iPhone FLAC encode time (desktop is under a second), a screen lock or app switch mid-take, real Safari playback of the encoded FLAC.
-- Known gaps, by choice: drafts have no label editor (labels are set on the uploaded track); a lost response after a successful confirm could create a duplicate track on retry; only ready drafts get lanes (recording/encoding show in the live lane and `EncodeStatus`).
-- mp3/m4a decoding was never tested per browser even though uploads accept them.
-- FLAC encoder choice: `libflacjs` asm.js was chosen after a comparison with Mediabunny WASM in three headless desktop engines (`spike/SPIKE_NOTES.md`); iPhone timing was never measured.
-- Chromium's fake microphone reports two channels even when one is requested; the recorder reads channel 0 of a mono worklet input, so takes are mono regardless. Real microphones are untested.
-- Another session may be working on M0 follow-ups (the `m0-completion` worktree, `spike/`). Run `git status` first and do not overwrite or revert changes you did not make.
+Verified for real: the Docker image and compose stack (start order, health, no published ports, data surviving `down && up`, migration of a fresh database, 503 with the database gone), the cleanup CLI and S3 listing against RustFS, and the whole UI through Playwright. Not verified: R2, the tunnel, GitHub CI.
 
-## 5. Open items from the earlier audits (not touched in M2; fix or consciously defer)
+## 5. Open audit items (from earlier sessions; not part of M3, fix or consciously defer)
 
+Done in M3: project load error state (was item 3), API error logging (item 4).
+Still open:
 1. **Loop leaks between projects**: `useProjectAudio` cleanup never calls `clearLoop()`; engine and transport store are singletons, so a loop set in one project stays live in the next. Add a regression test.
-2. **Play at the very end** starts and stops immediately (`pausedPlayhead == duration`). Decide: rewind to 0 on Play (but not when recording starts: `play()` is called after `beginRecording`).
-3. **Project load error**: a non-404 failure leaves `ProjectPage` on "Loading…" (only a toast). Add an error state with Retry.
-4. **API logger is off** (`logger: false` in `app.ts`), so failed storage deletes are silent. Enable at least error logging before M3's cleanup relies on them.
-5. **Loop scheduler timer** (`engine.ts`, 40 ms `setInterval`, 250 ms lookahead) may be throttled in hidden tabs. Related for M2: a take running in a hidden tab has not been tried.
-6. Untested spots: `server.ts` bad-env exit, `installGestureUnlock`, track-order transaction atomicity, boundaries 600000 ms and 30-char label.
-7. Doc drift: `.env.example` line 12 still says MinIO; `PUBLIC_ORIGIN` is validated but unused (dead until M3); a stale comment in `mixerStore.ts`; the README states "no gap at the wrap" as fact, but it was only shown on a fake clock and in one headless Chromium run.
+2. **Play at the very end** starts and stops immediately (`pausedPlayhead == duration`). Decide: rewind to 0 on Play (but not when recording starts: `play()` runs after `beginRecording`).
+3. **Loop scheduler timer** (`engine.ts`, 40 ms `setInterval`) may be throttled in hidden tabs; a take running in a hidden tab has not been tried.
+4. Untested: `server.ts` bad-env exit, `installGestureUnlock`, track-order transaction atomicity, boundaries 600000 ms and 30-char label.
+5. Doc drift: `PUBLIC_ORIGIN` is validated but unused by the server (only the CORS policy and docs use it); a stale comment in `mixerStore.ts`; the README states "no gap at the wrap" as fact, though it was only shown on a fake clock and in headless Chromium (the E2E wrap test checks the position, not the sound).
+6. Known gaps by choice: drafts have no label editor; a lost response after a successful confirm could create a duplicate track on retry; a very short take (about 1 s or less) produces no draft; mp3/m4a decoding untested per browser; `POSTGRES_PASSWORD` must be letters and digits.
 
-## 6. Environment gotchas (each one cost time)
+## 6. Environment gotchas
 
-- **Ports**: web 5173 (something else on this machine often holds it, so Vite silently moves to 5174/5175: read the `pnpm dev` output and pass `BASE` to probes), API 3100, Postgres 5433, S3 9000. Ports 3000 and 5432 are used by the user's other containers: do not stop those, and do not kill whatever holds 5173.
-- **Docker stack can be down** between sessions (`ECONNREFUSED ::1:5433` in API tests): `docker compose -f docker-compose.dev.yml up -d`, then `pnpm db:migrate` before `pnpm dev`. RustFS replaced MinIO.
-- **Headless Chromium's fake microphone works now** (`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`, page on `http://localhost`): the M0 note that it never resolved no longer holds. Press keys only after the page has mounted (wait for the Record button), or the shortcut listener is not attached yet.
-- **Shell tool**: the permission classifier intermittently returns "no verdict", mostly for big or multi-file commands and heredocs, sometimes for tiny ones. Write files with Write/Edit, keep Bash commands short, retry once, and continue with non-Bash work meanwhile. macOS has no `timeout` command: use the Bash tool's `timeout`. zsh: unmatched globs are errors (`--include=*.ts` fails: quote it), `sed -i ''` needs the empty string.
-- **TypeScript 7 + Biome**: `biome check --write` must cover `apps packages` (it only fixed what it was given). `biome migrate` once rewrote `recommended: true` to `preset: none`; check with a deliberately bad file if you touch `biome.json`. Biome flags `role="meter"` on a div (use `<meter>`), assignments inside expressions, and forEach callbacks that return.
-- **Tests**: jsdom has no `<dialog>` modal (emulated in `apps/web/src/test/setup.ts`, which now tolerates the node environment). `fake-indexeddb` drops jsdom's `Blob` on read-back (seed with `node:buffer`'s `Blob`) and its timers clash with fake timers (fake only `setInterval`). The FLAC test needs `// @vitest-environment node`. Entering a project restores its remembered mix, so set mix state in a test *after* the page has loaded. `getDraftStore()` is cached at module level: call `resetDraftStoreForTests()` per test.
-- **CI**: `.github/workflows/ci.yml` runs lint, typecheck and test with Postgres and RustFS as services; ~1 minute.
-- `spike/` is throwaway and outside the pnpm workspace (own lockfile). It still holds the M0 code that M2 ported; delete it only when the user says so.
+- **Ports**: web 5173 (Vite silently moves to 5174/5175 if taken), API 3100, Postgres 5433, S3 9000, E2E app 3300. Ports 3000 and 5432 belong to the user's other containers: do not stop them.
+- **The dev compose stack goes down between sessions** (and sometimes mid-session): `docker compose -f docker-compose.dev.yml up -d`. API tests and `pnpm e2e` both need it (`ECONNREFUSED ::1:5433` means it is down). The dev database and the E2E database are different.
+- **E2E**: `pnpm e2e` builds first (a stale `apps/*/dist` runs old code: rebuild after changing app code). Chromium is installed once with `pnpm --filter @sing-along/e2e exec playwright install chromium`. Selector traps: `.upload-items > li` (the label picker has nested `li`), `getByRole` names are substrings (`exact: true` for "Mute all X" vs "Unmute all X"), Playwright refuses in-memory files over 50 MB (write to disk), and the timeline viewport is ~830 px at 50 px/s (positions beyond ~16 s need scrolling).
+- **Docker build** copies the whole workspace; `.dockerignore` excludes `spike`, `tasks`, `*.md`. The API runs from esbuild bundles, so a new native or non-bundlable dependency needs `build.mjs` attention.
+- **Shell tool**: the permission classifier sometimes returns "no verdict" for big commands; keep Bash commands short and write files with Write/Edit. macOS has no `timeout`. zsh: unmatched globs are errors, `dc` is an alias (use a script file for compose wrappers), `sed -i ''` needs the empty string.
+- **TypeScript 7 + Biome**: `biome check --write` must cover `apps packages e2e`. Biome flags `role="meter"` on a div (use `<meter>`), assignments inside expressions and forEach callbacks that return.
+- **Tests (Vitest)**: jsdom has no `<dialog>` modal (emulated in `apps/web/src/test/setup.ts`); `fake-indexeddb` drops jsdom's `Blob` on read-back; the FLAC test needs `// @vitest-environment node`; failed queries toast globally unless `meta: { silent: true }`.
+- `spike/` is throwaway and outside the workspace (own lockfile); delete it only when the user says so.
 
-## 7. Suggested first steps for the next session
+## 7. Suggested first steps
 
-1. `git status`, read `CLAUDE.md`, this file. Check PR #3 (`gh pr view 3`): if it is merged, `git checkout main && git pull` and start a new branch; if not, the user merges it (`main` is protected and the user has not asked for anyone else to merge).
-2. If the user brings Bluetooth numbers or Safari/Android results: add them to the README "Known issues" and tick the matching boxes in `tasks/M2.md`.
-3. Consider the audit items in section 5, in order, as small commits before or at the start of M3 (start with the loop leak and Play-at-end: both touch code recording uses). M3 needs the Playwright suite covering the M1 and M2 flows: `spike/probe/m2-record-smoke.mjs` is a good starting script for the recording flow.
+1. `git status`, read `CLAUDE.md` and this file. If the user has merged `m3-hardening`: `git checkout main && git pull`, then a new branch.
+2. Bring the user's QA findings in: fix, or record them in the matching task (`tasks/M3.md` M3-08/M3-09, `tasks/M2.md` for device results), tick boxes only when verified, and update the README "Known issues".
+3. Consider the audit items in section 5 (1 and 2 first) as small commits before M4, then M4 (PWA, offline; its E2E flows go in `e2e/`).

@@ -1,3 +1,4 @@
+import { type Caps, DEFAULT_CAPS } from '@sing-along/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { apiFetch } from '../api/client';
@@ -5,6 +6,8 @@ import { putWithProgress } from '../api/put';
 import { type UploadDeps, uploadTrack } from '../api/upload';
 import { getAudioController } from '../audio/controller';
 import { defaultTrackName, resolveAudioMime } from '../lib/audioFile';
+import { fileCapMessage } from '../lib/caps';
+import { LabelsLoadError } from '../lib/LabelsLoadError';
 import { useLabels } from '../lib/useLabels';
 import { LabelPicker } from '../ui/LabelPicker';
 
@@ -47,10 +50,17 @@ function readPerformer(): string {
 export function UploadPanel({
   projectId,
   deps = browserUploadDeps,
+  trackCount = 0,
+  caps = DEFAULT_CAPS,
 }: {
   projectId: number;
   deps?: UploadDeps;
+  /** Tracks already in the project; drafts don't count. */
+  trackCount?: number;
+  caps?: Caps;
 }) {
+  const atLimit = trackCount >= caps.maxTracksPerProject;
+  const limitMessage = `Track limit reached (${caps.maxTracksPerProject}).`;
   const qc = useQueryClient();
   const [items, setItems] = useState<Item[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
@@ -59,7 +69,7 @@ export function UploadPanel({
   const chain = useRef<Promise<void>>(Promise.resolve());
   const nextKey = useRef(1);
 
-  const { labels, create: createLabel } = useLabels();
+  const { labels, create: createLabel, isError: labelsFailed, retry: retryLabels } = useLabels();
 
   const update = (key: number, patch: Partial<Item>) => {
     itemsRef.current = itemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i));
@@ -71,11 +81,17 @@ export function UploadPanel({
   };
 
   const addFiles = (files: File[]) => {
+    if (atLimit) return;
     const bad: string[] = [];
     const added: Item[] = [];
     for (const file of files) {
       if (!resolveAudioMime(file)) {
         bad.push(`${file.name}: Unsupported format.`);
+        continue;
+      }
+      const tooBig = fileCapMessage(file, caps);
+      if (tooBig) {
+        bad.push(`${file.name}: ${tooBig}`);
         continue;
       }
       added.push({
@@ -111,6 +127,7 @@ export function UploadPanel({
         form: { name: item.name, performer: item.performer, labelIds: item.labelIds },
         onProgress: (f) => update(key, { progress: f }),
         signal: ctl.signal,
+        caps,
       });
       remove(key);
       await Promise.all([
@@ -149,18 +166,20 @@ export function UploadPanel({
         addFiles(Array.from(e.dataTransfer.files));
       }}
     >
-      <label>
+      <label title={atLimit ? limitMessage : undefined}>
         Add audio files
         <input
           type="file"
           accept={ACCEPT}
           multiple
+          disabled={atLimit}
           onChange={(e) => {
             addFiles(Array.from(e.target.files ?? []));
             e.target.value = ''; // allow choosing the same file again
           }}
         />
       </label>
+      {atLimit && <p className="hint">{limitMessage}</p>}
       <p className="hint">…or drop files here (mp3, m4a/aac, wav, ogg, webm/opus, flac)</p>
 
       {rejected.length > 0 && (
@@ -201,6 +220,7 @@ export function UploadPanel({
               </label>
               <fieldset disabled={!idle}>
                 <legend>Labels</legend>
+                {labelsFailed && <LabelsLoadError onRetry={retryLabels} />}
                 <LabelPicker
                   labels={labels}
                   selectedIds={item.labelIds}
@@ -226,7 +246,8 @@ export function UploadPanel({
                   </button>
                   <button
                     type="button"
-                    disabled={item.name.trim() === ''}
+                    disabled={item.name.trim() === '' || atLimit}
+                    title={atLimit ? limitMessage : undefined}
                     onClick={() => enqueue([item.key])}
                   >
                     Upload

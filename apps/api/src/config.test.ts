@@ -22,6 +22,60 @@ describe('loadConfig', () => {
     expect(c.publicOrigin).toBe('http://localhost:5173');
   });
 
+  it('defaults every cap to the PRD values', () => {
+    expect(loadConfig(valid).caps).toEqual({
+      maxFileBytes: 60 * 1024 * 1024,
+      maxTrackMs: 600_000,
+      maxTracksPerProject: 10,
+      maxProjects: 100,
+      maxStorageBytes: 8 * 1024 ** 3,
+    });
+  });
+
+  it('reads cap overrides from the environment', () => {
+    const c = loadConfig({
+      ...valid,
+      MAX_FILE_MB: '20',
+      MAX_TRACK_MINUTES: '5',
+      MAX_TRACKS_PER_PROJECT: '4',
+      MAX_PROJECTS: '7',
+      MAX_STORAGE_GB: '2',
+    });
+    expect(c.caps).toEqual({
+      maxFileBytes: 20 * 1024 * 1024,
+      maxTrackMs: 300_000,
+      maxTracksPerProject: 4,
+      maxProjects: 7,
+      maxStorageBytes: 2 * 1024 ** 3,
+    });
+  });
+
+  it('schedules the cleanup nightly by default and lets it be switched off', () => {
+    expect(loadConfig(valid).cleanupCron).toBe('30 3 * * *');
+    expect(loadConfig({ ...valid, CLEANUP_CRON: '0 4 * * 0' }).cleanupCron).toBe('0 4 * * 0');
+    expect(loadConfig({ ...valid, CLEANUP_CRON: 'off' }).cleanupCron).toBeNull();
+  });
+
+  it('rejects an invalid cleanup schedule at startup', () => {
+    expect(() => loadConfig({ ...valid, CLEANUP_CRON: 'every night' })).toThrow(/CLEANUP_CRON/);
+  });
+
+  it('serves no web app and uses the source migrations unless told otherwise', () => {
+    const c = loadConfig(valid);
+    expect(c.webDir).toBeUndefined();
+    expect(c.migrationsDir).toBeUndefined();
+  });
+
+  it('reads WEB_DIST_DIR and MIGRATIONS_DIR (set by the Docker image)', () => {
+    const c = loadConfig({ ...valid, WEB_DIST_DIR: '/app/web', MIGRATIONS_DIR: '/app/drizzle' });
+    expect(c.webDir).toBe('/app/web');
+    expect(c.migrationsDir).toBe('/app/drizzle');
+  });
+
+  it('rejects a non-positive cap', () => {
+    expect(() => loadConfig({ ...valid, MAX_PROJECTS: '0' })).toThrow(/MAX_PROJECTS/);
+  });
+
   it('reads PORT and S3_FORCE_PATH_STYLE', () => {
     const c = loadConfig({ ...valid, PORT: '4000', S3_FORCE_PATH_STYLE: 'true' });
     expect(c.port).toBe(4000);

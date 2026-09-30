@@ -1,0 +1,67 @@
+# Production stack: the app (API + web) and Postgres on a named volume. Configure everything
+# through .env (copy .env.production.example). See README, "Deploy".
+#
+# No service publishes a host port. The app joins the external `proxy` network that your existing
+# cloudflared tunnel is on, and the tunnel reaches it at http://sing_along_app:3100. Postgres is
+# only on this stack's private network. Create the network once if it does not exist:
+#   docker network create proxy
+name: sing-along
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sing_along_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: singalong
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: singalong
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U singalong -d singalong']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - internal
+
+  app:
+    build: .
+    image: ${APP_IMAGE:-sing-along:latest}
+    container_name: sing_along_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Only letters and digits in POSTGRES_PASSWORD: it is placed in this URL unescaped.
+      DATABASE_URL: postgres://singalong:${POSTGRES_PASSWORD}@postgres:5432/singalong
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT in .env (the R2 S3 API URL)}
+      S3_REGION: auto
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in .env}
+      S3_FORCE_PATH_STYLE: 'false'
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env (https://your-domain)}
+      MAX_FILE_MB: ${MAX_FILE_MB:-60}
+      MAX_TRACK_MINUTES: ${MAX_TRACK_MINUTES:-10}
+      MAX_TRACKS_PER_PROJECT: ${MAX_TRACKS_PER_PROJECT:-10}
+      MAX_PROJECTS: ${MAX_PROJECTS:-100}
+      MAX_STORAGE_GB: ${MAX_STORAGE_GB:-8}
+      CLEANUP_CRON: ${CLEANUP_CRON:-30 3 * * *}
+    networks:
+      - internal
+      - proxy
+    # For debugging only, reachable from this machine alone. Uncomment to use:
+    # ports:
+    #   - '127.0.0.1:3100:3100'
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    external: true

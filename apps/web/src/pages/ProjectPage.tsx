@@ -17,8 +17,10 @@ import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
+import { useCaps } from '../lib/useStorageUsage';
 import { Timeline } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
+import { EmptyProject } from './EmptyProject';
 import { LabelFilterBar } from './LabelFilterBar';
 import { NotFound } from './NotFound';
 import { ProjectHeader } from './ProjectHeader';
@@ -32,6 +34,7 @@ const EMPTY: never[] = [];
 export function ProjectPage() {
   const { id } = useParams();
   const [filter, setFilter] = useState<number[]>([]);
+  const caps = useCaps();
   const query = useQuery({
     queryKey: ['project', id],
     queryFn: () => apiFetch<ProjectDetail>(`/api/projects/${id}`),
@@ -65,7 +68,7 @@ export function ProjectPage() {
     [query.data, latency.tracks],
   );
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
-  useProjectAudio(project?.tracks ?? EMPTY);
+  const retryAudio = useProjectAudio(project?.tracks ?? EMPTY);
   useDraftAudio(drafts);
   // Drafts count as "known" ids for mix persistence, but only once they have loaded: pruning
   // against an empty list would forget their remembered mix.
@@ -85,6 +88,17 @@ export function ProjectPage() {
   if (query.error instanceof ApiRequestError && query.error.status === 404) {
     return <NotFound title="Project not found" />;
   }
+  if (query.isError && !query.data) {
+    // Only when there is nothing to show: a failed background refresh keeps the page (and playback).
+    return (
+      <div className="state-box">
+        <p>Couldn't load this project.</p>
+        <button type="button" onClick={() => void query.refetch()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (!query.data || !project) return <p>Loading…</p>;
   return (
     <section>
@@ -103,6 +117,7 @@ export function ProjectPage() {
           Reset mix
         </button>
       </p>
+      {project.tracks.length === 0 && drafts.length === 0 && <EmptyProject />}
       <div className="workspace">
         <TrackPanels
           project={project}
@@ -113,9 +128,9 @@ export function ProjectPage() {
           onDraftLatency={latency.setDraftLatency}
           onDraftUpload={uploadDraftTake}
         />
-        <Timeline tracks={visible} drafts={drafts} />
+        <Timeline tracks={visible} drafts={drafts} onRetryAudio={retryAudio} />
       </div>
-      <UploadPanel projectId={query.data.id} />
+      <UploadPanel projectId={query.data.id} trackCount={query.data.tracks.length} caps={caps} />
     </section>
   );
 }

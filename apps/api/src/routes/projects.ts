@@ -1,17 +1,28 @@
-import { projectCreateSchema, projectUpdateSchema } from '@sing-along/shared';
-import { eq } from 'drizzle-orm';
+import { DEFAULT_CAPS, projectCreateSchema, projectUpdateSchema } from '@sing-along/shared';
+import { eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Deps } from '../app';
+import { projectLimit } from '../caps-messages';
+import { lockCaps } from '../db/caps';
 import { listProjects, loadProject } from '../db/projects-repo';
 import { projects, tracks } from '../db/schema';
 import { notFound, parseId, parseInput } from '../errors';
 
-export function registerProjectRoutes(app: FastifyInstance, { db, storage }: Deps) {
+export function registerProjectRoutes(
+  app: FastifyInstance,
+  { db, storage, caps = DEFAULT_CAPS }: Deps,
+) {
   app.get('/api/projects', async () => listProjects(db));
 
   app.post('/api/projects', async (req, reply) => {
     const input = parseInput(projectCreateSchema, req.body);
-    const [row] = await db.insert(projects).values(input).returning({ id: projects.id });
+    const row = await db.transaction(async (tx) => {
+      await lockCaps(tx);
+      const [count] = await tx.select({ n: sql<number>`count(*)::int` }).from(projects);
+      if ((count?.n ?? 0) >= caps.maxProjects) throw projectLimit(caps);
+      const [inserted] = await tx.insert(projects).values(input).returning({ id: projects.id });
+      return inserted;
+    });
     if (!row) throw new Error('insert returned no row');
     const created = await loadProject(db, row.id);
     return reply.status(201).send(created);

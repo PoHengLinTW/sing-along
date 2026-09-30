@@ -1,5 +1,6 @@
-import type { TrackDto, UploadUrlRequest, UploadUrlResponse } from '@sing-along/shared';
+import type { Caps, TrackDto, UploadUrlRequest, UploadUrlResponse } from '@sing-along/shared';
 import { resolveAudioMime } from '../lib/audioFile';
+import { durationCapMessage, fileCapMessage } from '../lib/caps';
 import { computePeaks } from '../lib/peaks';
 import type { apiFetch as ApiFetch } from './client';
 
@@ -30,6 +31,8 @@ export interface UploadParams {
   form: { name: string; performer: string; labelIds: number[] };
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  /** Checked before anything is sent; the server enforces the same caps. */
+  caps?: Caps;
 }
 
 export interface PreparedUpload {
@@ -83,6 +86,9 @@ export async function uploadTrack(deps: UploadDeps, p: UploadParams): Promise<Tr
   const mimeType = resolveAudioMime(p.file);
   if (!mimeType) throw new Error('Unsupported format.');
 
+  const tooBig = p.caps && fileCapMessage(p.file, p.caps);
+  if (tooBig) throw new Error(tooBig);
+
   let audio: DecodedAudio;
   try {
     audio = await deps.decode(await p.file.arrayBuffer());
@@ -90,11 +96,15 @@ export async function uploadTrack(deps: UploadDeps, p: UploadParams): Promise<Tr
     throw new Error('This file could not be read as audio.');
   }
 
+  const durationMs = Math.round(audio.durationSec * 1000);
+  const tooLong = p.caps && durationCapMessage(durationMs, p.caps);
+  if (tooLong) throw new Error(tooLong);
+
   return uploadPrepared(deps, {
     projectId: p.projectId,
     blob: p.file,
     mimeType,
-    durationMs: Math.round(audio.durationSec * 1000),
+    durationMs,
     peaks: computePeaks(audio.channels, audio.sampleRate, PEAKS_PER_SEC),
     startOffsetMs: 0,
     latencyOffsetMs: 0,

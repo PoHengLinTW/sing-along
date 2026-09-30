@@ -1,9 +1,9 @@
-import type { ObjectInfo, Storage } from '../storage/types';
+import type { ListedObject, ObjectInfo, Storage } from '../storage/types';
 
 export class FakeStorage implements Storage {
   deleted: string[] = [];
   failDelete = false;
-  objects = new Map<string, ObjectInfo>();
+  objects = new Map<string, ObjectInfo & { lastModified?: Date }>();
   presignedPuts: { key: string; contentType: string; sizeBytes: number; expiresInSec: number }[] =
     [];
 
@@ -26,5 +26,14 @@ export class FakeStorage implements Storage {
     if (this.failDelete) throw new Error('storage down');
     this.deleted.push(...keys);
     for (const k of keys) this.objects.delete(k);
+  }
+  async list(prefix: string): Promise<ListedObject[]> {
+    return [...this.objects.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, o]) => ({
+        key,
+        sizeBytes: o.sizeBytes,
+        lastModified: o.lastModified ?? new Date(),
+      }));
   }
 }

@@ -1,11 +1,14 @@
 import type { TrackDto } from '@sing-along/shared';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { getAudioController } from './controller';
 import { loadTrackBuffer } from './loadTrackBuffer';
 import { AudioSync } from './sync';
 
-/** Loads the project's tracks into the audio engine and keeps them in step with edits; cleans up on leave. */
-export function useProjectAudio(tracks: TrackDto[]): void {
+/**
+ * Loads the project's tracks into the audio engine and keeps them in step with edits; cleans up on
+ * leave. Returns a function that retries one track whose download failed.
+ */
+export function useProjectAudio(tracks: TrackDto[]): (trackId: number) => void {
   const sync = useRef<AudioSync | null>(null);
 
   useEffect(() => {
@@ -28,4 +31,6 @@ export function useProjectAudio(tracks: TrackDto[]): void {
       })),
     );
   }, [tracks]);
+
+  return useCallback((trackId: number) => sync.current?.retry(trackId), []);
 }
