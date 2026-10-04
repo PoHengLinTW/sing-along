@@ -8,6 +8,13 @@ interface Deps {
   decode: (data: ArrayBuffer) => Promise<AudioBuffer>;
 }
 
+/** Identifies a draft's audio file, so an edit is noticed but a rename or a re-read is not. */
+export function audioVersion(d: DraftView): string {
+  let sum = 0;
+  for (const p of d.peaks) sum = (sum * 31 + Math.round(p * 1000)) % 1_000_003;
+  return `${d.blob.size}:${d.durationMs}:${d.peaks.length}:${sum}`;
+}
+
 /** Plays the project's drafts in the engine next to the uploaded tracks, under their own ids. */
 export function useDraftAudio(drafts: DraftView[], deps?: Partial<Deps>): void {
   const sync = useRef<AudioSync | null>(null);
@@ -35,6 +42,7 @@ export function useDraftAudio(drafts: DraftView[], deps?: Partial<Deps>): void {
         id: d.engineId,
         startOffsetMs: d.startOffsetMs,
         latencyOffsetMs: d.latencyOffsetMs,
+        version: audioVersion(d),
       })),
     );
   }, [drafts]);

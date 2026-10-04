@@ -139,3 +139,121 @@ describe('AudioSync', () => {
     expect(ctx.controller.removeTrack).toHaveBeenCalledWith(1);
   });
 });
+
+describe('AudioSync when a loaded track gets different audio', () => {
+  const v = (n: string, over: Partial<SyncTrack> = {}) => track(1, { version: n, ...over });
+  const load1 = async (version = 'v1') => {
+    ctx.sync.sync([v(version)]);
+    ctx.pending.get(1)?.resolve(buf(10));
+    await flush();
+    ctx.controller.addTrack.mockClear();
+    ctx.controller.removeTrack.mockClear();
+    ctx.load.mockClear();
+  };
+
+  it('loads the new audio and swaps it into the engine', async () => {
+    await load1();
+    const fresh = buf(4);
+    ctx.sync.sync([v('v2')]);
+    expect(ctx.load).toHaveBeenCalledTimes(1);
+    ctx.pending.get(1)?.resolve(fresh);
+    await flush();
+    expect(ctx.controller.removeTrack).toHaveBeenCalledWith(1);
+    expect(ctx.controller.addTrack).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, buffer: fresh }),
+    );
+  });
+
+  it('keeps playing the old audio until the new audio is ready, and stays "ready"', async () => {
+    await load1();
+    ctx.sync.sync([v('v2')]);
+    expect(ctx.controller.removeTrack).not.toHaveBeenCalled();
+    expect(ctx.status.getState().byId[1]).toBe('ready');
+    ctx.pending.get(1)?.resolve(buf(4));
+    await flush();
+    expect(ctx.status.getState().byId[1]).toBe('ready');
+  });
+
+  it('removes the old track before adding the new one', async () => {
+    await load1();
+    const order: string[] = [];
+    ctx.controller.removeTrack.mockImplementation(() => void order.push('remove'));
+    ctx.controller.addTrack.mockImplementation(() => void order.push('add'));
+    ctx.sync.sync([v('v2')]);
+    ctx.pending.get(1)?.resolve(buf(4));
+    await flush();
+    expect(order).toEqual(['remove', 'add']);
+  });
+
+  it('places the new audio at the latest offsets, also if they changed while it loaded', async () => {
+    await load1();
+    ctx.sync.sync([v('v2', { startOffsetMs: 1000 })]);
+    ctx.sync.sync([v('v2', { startOffsetMs: 1000, latencyOffsetMs: 250 })]);
+    ctx.pending.get(1)?.resolve(buf(4));
+    await flush();
+    expect(ctx.controller.addTrack).toHaveBeenCalledWith(
+      expect.objectContaining({ startOffsetMs: 1000, latencyOffsetMs: 250 }),
+    );
+  });
+
+  it('does not reload for an offset change alone, or when there is no version', async () => {
+    await load1();
+    ctx.sync.sync([v('v1', { latencyOffsetMs: 40 })]);
+    expect(ctx.load).not.toHaveBeenCalled();
+    expect(ctx.controller.setOffsets).toHaveBeenCalled();
+
+    const plain = setup();
+    plain.sync.sync([track(2)]);
+    plain.pending.get(2)?.resolve(buf());
+    await flush();
+    plain.load.mockClear();
+    plain.sync.sync([track(2, { latencyOffsetMs: 5 })]);
+    expect(plain.load).not.toHaveBeenCalled();
+  });
+
+  it('asks only once when the same new audio is announced again while loading', async () => {
+    await load1();
+    ctx.sync.sync([v('v2')]);
+    ctx.sync.sync([v('v2')]);
+    expect(ctx.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a slower, older reload when a newer one was asked for', async () => {
+    await load1();
+    ctx.sync.sync([v('v2')]);
+    const first = ctx.pending.get(1);
+    ctx.sync.sync([v('v3')]);
+    const second = ctx.pending.get(1);
+    expect(first).not.toBe(second);
+    const newest = buf(3);
+    second?.resolve(newest);
+    await flush();
+    first?.resolve(buf(99));
+    await flush();
+    expect(ctx.controller.addTrack).toHaveBeenCalledTimes(1);
+    expect(ctx.controller.addTrack).toHaveBeenCalledWith(
+      expect.objectContaining({ buffer: newest }),
+    );
+  });
+
+  it('keeps the old audio if the new audio cannot be loaded, and tries again on the next sync', async () => {
+    await load1();
+    ctx.sync.sync([v('v2')]);
+    ctx.pending.get(1)?.reject(new Error('decode failed'));
+    await flush();
+    expect(ctx.controller.removeTrack).not.toHaveBeenCalled();
+    expect(ctx.status.getState().byId[1]).toBe('ready');
+    ctx.sync.sync([v('v2')]);
+    expect(ctx.load).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the result if the track was removed while it reloaded', async () => {
+    await load1();
+    ctx.sync.sync([v('v2')]);
+    ctx.sync.sync([]);
+    ctx.controller.addTrack.mockClear();
+    ctx.pending.get(1)?.resolve(buf(4));
+    await flush();
+    expect(ctx.controller.addTrack).not.toHaveBeenCalled();
+  });
+});

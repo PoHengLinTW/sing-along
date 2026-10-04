@@ -70,3 +70,44 @@ describe('useDraftAudio', () => {
     expect(controller.removeTrack).toHaveBeenCalledWith(-5);
   });
 });
+
+describe('useDraftAudio after the take is edited', () => {
+  const edited = (size: number, over: Partial<DraftView> = {}) =>
+    view({ blob: new Blob([new Uint8Array(size)]), durationMs: size * 100, ...over });
+
+  it('plays the edited audio: decodes the new file and swaps it into the engine', async () => {
+    const { rerender } = render([edited(4)]);
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(1));
+    rerender({ drafts: [edited(2)] }); // trimmed: a smaller, shorter file under the same draft id
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(2));
+    expect(decode).toHaveBeenCalledTimes(2);
+    expect(controller.removeTrack).toHaveBeenCalledWith(-5);
+  });
+
+  it('plays the audio of an edit that was undone: the earlier file comes back', async () => {
+    const { rerender } = render([edited(4)]);
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(1));
+    rerender({ drafts: [edited(2)] });
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(2));
+    rerender({ drafts: [edited(4)] });
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(3));
+  });
+
+  it('does not decode again for a rename, or when the same file is read back from storage', async () => {
+    const { rerender } = render([edited(4)]);
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(1));
+    rerender({ drafts: [edited(4, { name: 'Alto' })] }); // a new Blob object, same content
+    await new Promise((r) => setTimeout(r, 20));
+    expect(decode).toHaveBeenCalledTimes(1);
+    expect(controller.addTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not decode again for a Start time change', async () => {
+    const { rerender } = render([edited(4)]);
+    await waitFor(() => expect(controller.addTrack).toHaveBeenCalledTimes(1));
+    rerender({ drafts: [edited(4, { latencyOffsetMs: 300 })] });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(decode).toHaveBeenCalledTimes(1);
+    expect(controller.setOffsets).toHaveBeenCalled();
+  });
+});

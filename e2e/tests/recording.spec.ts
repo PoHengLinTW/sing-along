@@ -775,6 +775,57 @@ test.describe('editing local takes', () => {
     await expect.poll(async () => (await lane.boundingBox())?.width ?? 999).toBeLessThan(12); // 100 ms = 5 px
   });
 
+  test('trim and combine change the audio the player plays, not only the waveform', async ({
+    page,
+    request,
+  }) => {
+    // No other tracks: the player's total length is then the take's own audio, as decoded.
+    const { id } = await apiCreateProject(request, uniqueTitle('Audible'));
+    await page.goto(`/project/${id}`);
+    await expect(record(page)).toBeEnabled();
+    const total = async () => {
+      const text = (await page.locator('.transport .time').first().textContent()) ?? '';
+      const m = /\/\s*(\d+):(\d+)/.exec(text);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+    };
+    await takeOf(page, 5500);
+    const whole = await expect.poll(total).toBeGreaterThanOrEqual(5).then(total);
+    expect(whole).toBeLessThanOrEqual(8);
+
+    await dragHandle(page, 'end', -150); // ~3 s off the end
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await expect.poll(total, { timeout: 15_000 }).toBeLessThanOrEqual(whole - 2);
+
+    await bar(page)
+      .getByRole('button', { name: /^undo trim end/i })
+      .click();
+    await expect.poll(total, { timeout: 15_000 }).toBeGreaterThanOrEqual(whole - 1);
+
+    // A second take moved to 20 s, then combined: the player's length follows the merged audio.
+    await takeOf(page, 2500);
+    const second = page
+      .getByTestId(/^panel-draft-/)
+      .nth(1)
+      .getByRole('textbox', { name: 'Start time' });
+    await second.fill('00:20.000');
+    await second.press('Enter');
+    await expect.poll(total, { timeout: 15_000 }).toBeGreaterThanOrEqual(22);
+    await pickTake(page, 'Take 1');
+    await pickTake(page, 'Take 2');
+    await bar(page)
+      .getByRole('button', { name: /combine selected/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Take 1']);
+    await expect.poll(total, { timeout: 15_000 }).toBeGreaterThanOrEqual(22);
+    await bar(page)
+      .getByRole('button', { name: /^undo combine/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Take 1', 'Take 2']);
+    await expect.poll(total, { timeout: 15_000 }).toBeGreaterThanOrEqual(22);
+  });
+
   test('combine refuses overlapping takes, then joins them once one is moved, gap as silence', async ({
     page,
     request,
