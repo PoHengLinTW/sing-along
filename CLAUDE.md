@@ -27,6 +27,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `POST /api/projects/:id/tracks/upload-url` takes an optional `latencyOffsetMs`; a draft uploads with `source = 'recording'` through `uploadPrepared` (`api/upload.ts`).
 - Real-browser probes for M2 live in `spike/probe/` (`m2-record-smoke.mjs` drives the whole flow with Chromium's fake microphone against the dev stack; it needs `pnpm dev`, and Vite may pick a port other than 5173: pass `BASE`). Vitest's fake-indexeddb drops jsdom's `Blob`: seed test drafts with `node:buffer`'s `Blob` if a test reads them back.
 
+### Where things are (V2 first slice)
+
+- `apps/web/src/audio/recorder/RecordingSheet.tsx` (bottom sheet while a take is open), `session.ts` `pause()`/`resume()`, `recordingStore.ts` (`paused` status, `isTakeOpen`), `liveWave.ts` `tailColumns`. P pauses/resumes.
+- `apps/web/src/lib/startTime.ts` and `pages/StartTimeControl.tsx`: users edit one Start time; it is stored as `latency_offset_ms` (CONCLUDE Q24). `audio/latency.ts` still holds the pending-edit store.
+
 ### Where things are (M3)
 
 - `packages/shared/src/caps.ts`: `DEFAULT_CAPS`, `ErrorCode`s, `storageUsageSchema`, `formatBytes`. The API reads overrides from env (`MAX_FILE_MB`, ...); the client learns the live caps from `GET /api/storage` (`useCaps`).
@@ -44,9 +49,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | File | Role |
 |---|---|
 | `PRD.md` | The source of truth for requirements. Requirement IDs (e.g. `R4`, `C1`, `O3`) are referenced by the tasks. |
-| `tasks/M0.md` … `tasks/M4.md`, `tasks/STRETCH.md` | Tasks for each milestone (`M1-07` style IDs), each with dependencies and a checklist of acceptance criteria. |
+| `tasks/M0.md` … `tasks/M4.md`, `tasks/STRETCH.md` | Milestone tasks (`M1-07` style IDs) with dependencies and acceptance criteria; `STRETCH.md` also holds V2 recording/editing feedback and design questions, not yet implementation tasks (PRD §9.1, CONCLUDE Q23). |
 | `tasks/README.md` | The **Definition of Done** that every task inherits, plus planning decisions still waiting for confirmation. |
-| `CONCLUDE.md` | Log of decisions and their rationale (Q1–Q17). Check here before questioning a design choice. |
+| `CONCLUDE.md` | Log of decisions and their rationale (Q1–Q24). Check here before questioning a design choice. |
 | `FOLLOW_UP.md` | Open questions and parked stretch goals. |
 | `TODO.md` | Flat checklist from the planning session (the task files replace it for tracking). |
 

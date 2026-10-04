@@ -25,8 +25,11 @@ class RecorderProcessor extends AudioWorkletProcessor {
         this.capturing = false;
         this.emit([this.batcher.flush()]);
         this.port.postMessage({ type: 'done' });
-      } else if (m?.type === 'capture') this.capturing = m.on === true;
-      else if (m?.type === 'mute') this.batcher.setMuted(m.muted === true);
+      } else if (m?.type === 'capture') {
+        const on = m.on === true;
+        if (!on && this.capturing) this.emit([this.batcher.flush()]); // a pause closes the chunk
+        this.capturing = on;
+      } else if (m?.type === 'mute') this.batcher.setMuted(m.muted === true);
     };
   }
 

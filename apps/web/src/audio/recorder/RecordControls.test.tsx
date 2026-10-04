@@ -20,6 +20,8 @@ const session = {
     return {} as never;
   }),
   setMuted: vi.fn((m: boolean) => recording.setState({ muted: m })),
+  pause: vi.fn(() => recording.setState({ status: 'paused' })),
+  resume: vi.fn(async () => recording.setState({ status: 'recording' })),
 };
 const monitor = { setMuted: vi.fn((m: boolean) => levels.setState({ muted: m })) };
 
@@ -154,5 +156,32 @@ describe('mic mute', () => {
   it('tooltips name the shortcuts', () => {
     expect(recordButton().title).toMatch(/\(R\)/);
     expect(muteButton().title).toMatch(/\(M\)/);
+  });
+});
+
+describe('pause', () => {
+  it('P pauses a running take and resumes a paused one', async () => {
+    act(() => recording.setState({ status: 'recording' }));
+    fireEvent.keyDown(document.body, { key: 'p' });
+    expect(session.pause).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document.body, { key: 'P' });
+    await waitFor(() => expect(session.resume).toHaveBeenCalledTimes(1));
+  });
+
+  it('P does nothing when no take is open or while typing', () => {
+    fireEvent.keyDown(document.body, { key: 'p' });
+    act(() => recording.setState({ status: 'recording' }));
+    fireEvent.keyDown(screen.getByLabelText('notes'), { key: 'p' });
+    expect(session.pause).not.toHaveBeenCalled();
+    expect(session.resume).not.toHaveBeenCalled();
+  });
+
+  it('while paused the take can still be finished and the mic muted', async () => {
+    act(() => recording.setState({ status: 'paused', startSec: 10 }));
+    const stop = await screen.findByRole('button', { name: /stop recording/i });
+    expect((stop as HTMLButtonElement).disabled).toBe(false);
+    expect(muteButton().disabled).toBe(false);
+    await userEvent.click(stop);
+    expect(session.stop).toHaveBeenCalledTimes(1);
   });
 });

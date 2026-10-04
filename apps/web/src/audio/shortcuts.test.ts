@@ -71,6 +71,12 @@ describe('recordShortcut', () => {
     expect(recordShortcut(key('m'))).toBe('mic-mute');
     expect(recordShortcut(key('M'))).toBe('mic-mute');
   });
+  it('maps P to pause/resume', () => {
+    expect(recordShortcut(key('p'))).toBe('pause');
+    expect(recordShortcut(key('P'))).toBe('pause');
+    expect(recordShortcut(key('p', { target: el('<input type="text">') }))).toBeNull();
+    expect(recordShortcut(key('p', { ctrlKey: true }))).toBeNull();
+  });
   it('ignores other keys, and leaves the transport keys to the transport', () => {
     expect(recordShortcut(key('a'))).toBeNull();
     expect(recordShortcut(key(' '))).toBeNull();

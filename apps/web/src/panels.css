@@ -298,3 +298,82 @@ button[aria-pressed="true"] {
   color: #fff;
   background-image: repeating-linear-gradient(45deg, #0000 0 6px, #ffffff33 6px 12px);
 }
+
+.panel-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.panel-start .start-time {
+  width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.panel-start .start-time[aria-invalid="true"] {
+  outline: 2px solid var(--danger, #c0392b);
+}
+
+.recording-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.5rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  border-radius: 1rem 1rem 0 0;
+  background: var(--surface, Canvas);
+  color: var(--text, CanvasText);
+  box-shadow: 0 -4px 24px rgb(0 0 0 / 0.25);
+  animation: sheet-up 180ms ease-out;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-sheet {
+    animation: none;
+  }
+}
+.recording-sheet .sheet-status {
+  margin: 0;
+  font-weight: 600;
+}
+.recording-sheet .sheet-wave {
+  width: 100%;
+  height: 96px;
+  color: var(--accent, #d33);
+  background: rgb(127 127 127 / 0.12);
+  border-radius: 0.5rem;
+}
+.recording-sheet .sheet-times {
+  display: flex;
+  gap: 1.5rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.recording-sheet .sheet-times dt {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+.recording-sheet .sheet-times dd {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.recording-sheet .sheet-level meter {
+  width: 100%;
+}
+.recording-sheet .sheet-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.recording-sheet .sheet-controls button {
+  flex: 1 1 8rem;
+  min-height: 3rem;
+  font-size: 1rem;
+}

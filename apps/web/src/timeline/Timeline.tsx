@@ -6,7 +6,7 @@ import { type AudioController, getAudioController } from '../audio/controller';
 import { adjustEdge, type LoopRegion } from '../audio/loop';
 import type { DraftView } from '../audio/recorder/draftView';
 import { type LiveWave, liveWave } from '../audio/recorder/liveWave';
-import { type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
+import { isTakeOpen, type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { waveformColor } from '../lib/labels';
@@ -92,7 +92,7 @@ export function Timeline({
   const anchor = useRef<{ sec: number; x: number } | null>(null);
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
 
-  const isRecording = useStore(recording, (s) => s.status === 'recording');
+  const isRecording = useStore(recording, (s) => isTakeOpen(s.status));
   // Whole seconds only: this re-renders once a second while a take grows, not on every block.
   const liveEndSec = useSyncExternalStore(
     (fn) => live.subscribe(fn),

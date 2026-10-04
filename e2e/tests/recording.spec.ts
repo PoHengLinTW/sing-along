@@ -2,7 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { apiCreateProject, apiUploadTrack } from '../support/api';
 import { currentSeconds, uniqueTitle } from '../support/ui';
 
-// M2 (recording): mic setup and errors, input check, record over a track, draft, latency offset,
+// M2 (recording): mic setup and errors, input check, record over a track, draft, start time,
 // upload, discard, crash recovery, leave guard. Chromium's fake microphone stands in for a real
 // one (see playwright.config.ts); how it sounds on real hardware stays a manual check.
 
@@ -92,7 +92,8 @@ test('record over a track, stop, align it by ear, upload it: it becomes a record
   await expect(page.getByRole('button', { name: 'Restart' })).toBeEnabled(); // unlocked again
 
   // Align by ear, then upload.
-  await draft.getByLabel('Latency offset (ms)').fill('-50');
+  for (let i = 0; i < 5; i++)
+    await draft.getByRole('button', { name: 'Start 10 ms earlier' }).click();
   await draft.getByLabel('Performer').fill('Ann');
   await draft.getByLabel('Performer').press('Enter');
   await page.waitForTimeout(800);
@@ -203,12 +204,14 @@ test.describe('drafts', () => {
       'true',
     );
     await expect(draft.getByRole('button', { name: 'Loop around here' })).toBeVisible();
-    await draft.getByLabel('Latency offset (ms)').fill('40');
-    await draft.getByRole('button', { name: 'Reset latency offset' }).click();
-    await expect(draft.getByLabel('Latency offset (ms)')).toHaveValue('0');
+    const original = await draft.getByRole('textbox', { name: 'Start time' }).inputValue();
+    await draft.getByRole('button', { name: 'Start 100 ms later' }).click();
+    await expect(draft.getByRole('textbox', { name: 'Start time' })).not.toHaveValue(original);
+    await draft.getByRole('button', { name: 'Reset start time' }).click();
+    await expect(draft.getByRole('textbox', { name: 'Start time' })).toHaveValue(original);
   });
 
-  test('the latency offset can be typed, nudged with the arrow keys, and shifts the lane', async ({
+  test('the start time can be typed, nudged with buttons and arrow keys, and shifts the lane', async ({
     page,
     request,
   }) => {
@@ -217,15 +220,30 @@ test.describe('drafts', () => {
     const draft = drafts(page).first();
     const lane = page.locator('[data-testid^="lane-draft-"]').first();
     const left = async () => (await lane.boundingBox())?.x ?? 0;
+    const field = draft.getByRole('textbox', { name: 'Start time' });
     const start = await left();
-    await draft.getByLabel('Latency offset (ms)').fill('200');
-    await expect.poll(left).toBeGreaterThan(start + 5); // +200 ms is ~10 px at 50 px/s
-    const slider = draft.getByLabel('Latency offset', { exact: true });
-    await slider.focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(draft.getByLabel('Latency offset (ms)')).toHaveValue('201');
-    await page.keyboard.press('Shift+ArrowLeft');
-    await expect(draft.getByLabel('Latency offset (ms)')).toHaveValue('191');
+    await field.fill('00:05.000');
+    await field.press('Enter');
+    await expect(field).toHaveValue('00:05.000');
+    await expect.poll(left).toBeGreaterThan(start + 200); // 5 s is ~250 px at 50 px/s
+    await field.press('ArrowUp');
+    await expect(field).toHaveValue('00:05.010');
+    await field.press('Shift+ArrowDown');
+    await expect(field).toHaveValue('00:04.910');
+    await draft.getByRole('button', { name: 'Start 100 ms earlier' }).click();
+    await expect(field).toHaveValue('00:04.810');
+  });
+
+  test('an unreadable start time is flagged and put back', async ({ page, request }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 1500);
+    const field = drafts(page).first().getByRole('textbox', { name: 'Start time' });
+    const original = await field.inputValue();
+    await field.fill('soon');
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await field.press('Enter');
+    await expect(field).toHaveValue(original);
+    await expect(field).toHaveAttribute('aria-invalid', 'false');
   });
 
   test('discard asks first: cancel keeps the take, confirm removes it for good', async ({
@@ -335,3 +353,171 @@ test.describe('safety', () => {
     expect(width).toBeGreaterThan(100); // at least ~2 s of the take was kept
   });
 });
+
+test.describe('recording sheet', () => {
+  const sheet = (page: Page) => page.getByRole('region', { name: 'Recording' });
+  const finish = (page: Page) => page.getByRole('button', { name: 'Finish recording' });
+  const clock = (page: Page, label: 'Song' | 'Recorded') =>
+    sheet(page)
+      .locator('div', { has: page.getByText(label, { exact: true }) })
+      .locator('dd')
+      .first();
+  const startTake = async (page: Page) => {
+    await record(page).click();
+    await expect(sheet(page)).toBeVisible({ timeout: 15_000 });
+    await expect(sheet(page).getByRole('status')).toHaveText('Recording', { timeout: 15_000 });
+  };
+
+  test('opens when a take starts, draws the live waveform, and closes when the take is finished', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request);
+    await expect(sheet(page)).toHaveCount(0);
+    await startTake(page);
+    await expect(sheet(page).getByRole('img', { name: 'Live microphone waveform' })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const c = document.querySelector<HTMLCanvasElement>('canvas.sheet-wave');
+          const d = c?.getContext('2d')?.getImageData(0, 0, c.width, c.height).data ?? [];
+          let n = 0;
+          for (let i = 3; i < d.length; i += 4) if ((d[i] ?? 0) > 0) n++;
+          return n;
+        }),
+      )
+      .toBeGreaterThan(20);
+    await expect(sheet(page).getByLabel('Input level')).toBeVisible();
+    // Song position and recorded time are two separate, advancing values.
+    await expect(clock(page, 'Song')).not.toHaveText('00:00.000');
+    await expect(clock(page, 'Recorded')).not.toHaveText('00:00.000');
+    // The sheet owns the take: Escape does not end it.
+    await page.keyboard.press('Escape');
+    await expect(sheet(page)).toBeVisible();
+    await page.waitForTimeout(1200);
+    await finish(page).click();
+    await expect(sheet(page)).toHaveCount(0, { timeout: 30_000 });
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+  });
+
+  test('Pause freezes the song and the recorded time; Resume continues the same take', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 12);
+    await startTake(page);
+    await page.waitForTimeout(1500);
+    await sheet(page).getByRole('button', { name: 'Pause recording' }).click();
+    await expect(sheet(page).getByRole('status')).toHaveText('Paused');
+    await expect(sheet(page).getByRole('button', { name: 'Resume recording' })).toBeVisible();
+    const song = await clock(page, 'Song').textContent();
+    const recorded = await clock(page, 'Recorded').textContent();
+    await page.waitForTimeout(2500);
+    expect(await clock(page, 'Song').textContent()).toBe(song);
+    expect(await clock(page, 'Recorded').textContent()).toBe(recorded);
+
+    await sheet(page).getByRole('button', { name: 'Resume recording' }).click();
+    await expect(sheet(page).getByRole('status')).toHaveText('Recording');
+    await expect(clock(page, 'Recorded')).not.toHaveText(recorded as string);
+    await page.waitForTimeout(1500);
+    await finish(page).click();
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+
+    // One take of about 3 s: the 2.5 s pause added no silence.
+    const draft = drafts(page).first();
+    await draft.getByRole('button', { name: /upload take 1/i }).click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const detail = await (await request.get(`/api/projects/${await projectIdOf(page)}`)).json();
+    const take = detail.tracks.find((t: { source: string }) => t.source === 'recording');
+    expect(take.durationMs).toBeGreaterThan(2200);
+    expect(take.durationMs).toBeLessThan(4300);
+  });
+
+  test('P pauses and resumes from the keyboard', async ({ page, request }) => {
+    await openWithBacking(page, request, 12);
+    await startTake(page);
+    await page.keyboard.press('p');
+    await expect(sheet(page).getByRole('status')).toHaveText('Paused');
+    await page.keyboard.press('p');
+    await expect(sheet(page).getByRole('status')).toHaveText('Recording');
+    await page.waitForTimeout(1500); // a take of about 1 s or less leaves no draft
+    await finish(page).click();
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+  });
+
+  test('Mute microphone says the take records silence; Unmute undoes it; it can change while paused', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 12);
+    await startTake(page);
+    const mute = sheet(page).getByRole('button', { name: 'Mute microphone' });
+    await mute.click();
+    await expect(sheet(page).getByRole('status')).toContainText(/muted.*silence/i);
+    await sheet(page).getByRole('button', { name: 'Pause recording' }).click();
+    await expect(sheet(page).getByRole('status')).toHaveText('Paused, microphone muted');
+    await sheet(page).getByRole('button', { name: 'Unmute microphone' }).click();
+    await expect(sheet(page).getByRole('status')).toHaveText('Paused');
+    await sheet(page).getByRole('button', { name: 'Resume recording' }).click();
+    await expect(sheet(page).getByRole('status')).toHaveText('Recording');
+    await finish(page).click();
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+  });
+
+  test('Finish while paused saves the take once, even on a double click', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 12);
+    await startTake(page);
+    await page.waitForTimeout(1500);
+    await sheet(page).getByRole('button', { name: 'Pause recording' }).click();
+    await finish(page).dblclick();
+    await expect(sheet(page)).toHaveCount(0, { timeout: 30_000 });
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+    await page.waitForTimeout(1000);
+    await expect(drafts(page)).toHaveCount(1);
+  });
+
+  test('the transport Stop button also finishes a paused take', async ({ page, request }) => {
+    await openWithBacking(page, request, 12);
+    await startTake(page);
+    await page.waitForTimeout(1200);
+    await page.keyboard.press('p');
+    await expect(sheet(page).getByRole('status')).toHaveText('Paused');
+    await stop(page).click();
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+  });
+});
+
+test.describe('start time of an uploaded track', () => {
+  test('is typed in, saved to the project, and still there after a reload', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Start'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    await page.goto(`/project/${id}`);
+    const panel = page.getByTestId('panel-Alto');
+    const field = panel.getByRole('textbox', { name: 'Start time' });
+    await expect(field).toHaveValue('00:00.000');
+    await field.fill('00:03.500');
+    await field.press('Enter');
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/projects/${id}`)).json()).tracks[0].latencyOffsetMs,
+      )
+      .toBe(3500);
+    await page.reload();
+    await expect(
+      page.getByTestId('panel-Alto').getByRole('textbox', { name: 'Start time' }),
+    ).toHaveValue('00:03.500');
+    await expect(page.getByTestId('panel-Alto').getByText(/latency|delay/i)).toHaveCount(0);
+  });
+});
+
+/** The project id from the page address. */
+async function projectIdOf(page: Page): Promise<number> {
+  return Number(new URL(page.url()).pathname.split('/').pop());
+}

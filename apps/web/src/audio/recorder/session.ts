@@ -14,7 +14,10 @@ import { takePlacement } from './timing';
 /** PRD cap: one take is at most 10 minutes. */
 export const MAX_TAKE_SEC = 600;
 
-type ControllerPort = Pick<AudioController, 'beginRecording' | 'endRecording' | 'play'> & {
+type ControllerPort = Pick<
+  AudioController,
+  'beginRecording' | 'endRecording' | 'play' | 'pause'
+> & {
   engine: {
     readonly playing: boolean;
     ensureContext(): { resume(): Promise<unknown> };
@@ -22,7 +25,10 @@ type ControllerPort = Pick<AudioController, 'beginRecording' | 'endRecording' | 
   };
 };
 
-type RecorderPort = Pick<Recorder, 'start' | 'stop' | 'setMuted' | 'sampleCount' | 'sampleRate'>;
+type RecorderPort = Pick<
+  Recorder,
+  'start' | 'stop' | 'setMuted' | 'setCapturing' | 'sampleCount' | 'sampleRate'
+>;
 
 export interface SessionDeps {
   controller: ControllerPort;
@@ -122,10 +128,31 @@ export class RecordingSession {
     this.deps.recording.setState({ muted });
   }
 
+  /**
+   * Freezes the take and its backing together, so the paused time adds no silence. Capture stops
+   * first: frames after the playhead froze would not match the song.
+   */
+  pause(): void {
+    if (this.deps.recording.getState().status !== 'recording' || !this.recorder) return;
+    this.recorder.setCapturing(false);
+    this.deps.controller.pause();
+    this.deps.recording.setState({ status: 'paused' });
+  }
+
+  /** Continues the same take at the same song position. */
+  async resume(): Promise<void> {
+    if (this.deps.recording.getState().status !== 'paused' || !this.recorder) return;
+    const recorder = this.recorder;
+    this.deps.recording.setState({ status: 'recording' });
+    await this.deps.controller.play();
+    recorder.setCapturing(true);
+  }
+
   /** Ends the take: playback pauses at once, then the audio is flushed and the draft handed to the encoder. */
   stop(): Promise<Draft> {
     if (this.stopping) return this.stopping;
-    if (this.deps.recording.getState().status !== 'recording' || !this.recorder || !this.draft) {
+    const status = this.deps.recording.getState().status;
+    if ((status !== 'recording' && status !== 'paused') || !this.recorder || !this.draft) {
       return Promise.reject(new Error('Not recording'));
     }
     this.stopping = this.finish(this.recorder, this.draft).finally(() => {
@@ -136,7 +163,8 @@ export class RecordingSession {
 
   /** For leaving the page: stops a running take, does nothing otherwise. */
   stopIfRecording(): void {
-    if (this.deps.recording.getState().status === 'recording') void this.stop().catch(() => {});
+    const status = this.deps.recording.getState().status;
+    if (status === 'recording' || status === 'paused') void this.stop().catch(() => {});
   }
 
   private async finish(recorder: RecorderPort, draft: Draft): Promise<Draft> {

@@ -354,3 +354,33 @@ Details and numbers: `spike/SPIKE_NOTES.md`.
 - **R2 setup (M3-08):** creating the bucket, the token and the billing alert needs the user's Cloudflare account, so those criteria stay open with a README walk-through (`R2 setup`). What could be built is: `deploy/r2-cors.json` (GET/PUT/HEAD, `Content-Type` + `Content-Length`, one origin) and `pnpm check:cors` / `node dist/cors-check-cli.js`, which sends real preflights for the app origin (must be allowed for the three methods and Content-Type) and a foreign origin (must be refused), using a presigned URL so the host style matches what the browser will use. The judging logic is a pure function with unit tests; against the dev store (which allows every origin) the tool correctly reports the foreign origin as not refused. Not verified against R2 itself.
 - **E2E suite (M3-10):** `e2e/` is a workspace package (`@sing-along/e2e`) with Playwright, so `pnpm test` (Vitest) never needs browsers. `start-server.mjs` runs before the tests (Playwright starts `webServer` first): it recreates a dedicated database and bucket, then imports the built server bundle, so the suite exercises the same artifact the Docker image ships. Tests run one at a time on shared state and use unique titles; the 100-project test tops up to the limit through the API and removes what it made. Retries are off: a flaky test should be fixed. Things that cannot be reached for real are simulated with route mocks and named as such (the 8 GB budget, amber/red levels). Mapping of flows to tests: `tasks/M3.md`, M3-10. The suite found a real bug that the jsdom tests could not: the waveform sat above the "Failed to load audio" overlay, so its Retry button could not be clicked (fixed with a z-index).
 - **Compose joins the existing tunnel (M3-07, revised 2026-09-29):** the user already runs a Cloudflare Tunnel for other homelab apps (this was recorded in Q-hosting from the start and missed when the compose file was first written), so a second `cloudflared` service and a `TUNNEL_TOKEN` are gone. The compose file now follows the user's homelab convention: explicit `container_name`s (`sing_along_app`, `sing_along_postgres`), a private `internal` network, and the external `proxy` network for the app only, so Postgres is unreachable from other stacks. The tunnel route is `http://sing_along_app:3100`. Verified with a real run: the app answered 200 from a separate container on `proxy` by name, Postgres did not. Rejected: keeping our own cloudflared (redundant tunnel to maintain) and publishing a host port (more exposure, no benefit).
+
+---
+
+## Q23: Post-MVP recording and editing feedback (2026-10-03)
+
+**Requested direction:** After reporting the MVP finished, the user asked to capture four improvements before moving to stretch work:
+
+- A recording modal growing upward from the bottom, with the live waveform above Pause, Resume and Mic mute controls, plus other useful basic actions.
+- Control each track's **Start time**, replacing the user-facing delay concept.
+- Multiple recording sections in one track and a better re-recording workflow.
+- Track editing and combining the sections.
+
+**Planning decision:** Keep this feedback and its design exploration in [`tasks/STRETCH.md`](./tasks/STRETCH.md#v2--recording-and-track-editing-feedback), with requirement IDs V2-REC, V2-TIME, V2-TAKES and V2-EDIT in PRD §9.1. Keep the shipped v1 requirements as the baseline. Do not treat design proposals as approved implementation choices or mark old device/deploy criteria complete from this feedback alone.
+
+**Rationale:** These requests form a connected workflow: record a part in sections, retry the weak phrases, choose the best takes and assemble a track. A shared track/section/take model and explicit timeline placement are needed to avoid building incompatible controls and editing behavior.
+
+**Proposals still to resolve:** Pause capture and backing playback together; retain alternative takes until explicitly discarded; edit arrangements referencing immutable sources; initially combine sections for playback without rendering a new file. Exact timing, replacement/overlap semantics, save/recovery behavior, caps and delivery priority need the design pass described in the stretch document.
+
+**Effect on earlier decisions:** Q3/Q21's latency slider becomes a start-time control in V2; Q3's whole-new-take approach expands to sectional re-recording. Q7's single-file track and Q11's cache-by-track-ID assumption need a V2 migration plan. Originals can stay immutable while their arrangements become editable. Q16's existing S1–S7 priority has not been replaced by this feedback.
+
+---
+
+## Q24: V2 first slice, recording sheet, pause and Start time (2026-10-04)
+
+Built from Q23's proposals; the rest of V2 (sections, retries, editing) is not started.
+
+- **Recording sheet:** a non-modal panel fixed to the bottom while a take is open (`starting`, `recording`, `paused`, `stopping`). Live waveform (last 8 s) above the Song and Recorded times, the input level with a text clipping warning, then Pause/Resume, Mute/Unmute microphone and Finish recording. It has no close or collapse button and ignores Escape, so only Finish ends a take. Rejected: a modal (it would hide the timeline), a collapsible bar (extra states with nothing to gain yet).
+- **Pause:** one take, one draft. Pause turns capture off first, then freezes the backing; Resume plays, then turns capture on. The paused time adds no silence, and the take stays aligned because the playhead froze with it. Mic mute is unchanged (it records silence while time runs). Pause makes no new section: sections wait for the V2-TAKES model. Shortcut: P.
+- **Start time:** the panel edits `start_offset_ms + latency_offset_ms` as one `mm:ss.mmm` value (typing, ±10/±100 ms buttons, arrow keys, reset, loop preview). The stored data is unchanged: an edit writes `latency_offset_ms = start - start_offset_ms`, so existing tracks keep their audible placement with no migration and no API change. The stored latency range is now the API's ±600 s (was ±1 s for the slider). Reset returns to the song offset (latency 0). Before zero: a negative start is allowed and shown with a sign, as before.
+- **Not done:** dragging a lane to set the start, countdown, a preview step on the sheet (drafts already preview in the mix), device calibration.

@@ -13,6 +13,9 @@ class FakeRecorder {
   muted = false;
   stopped = false;
   start = vi.fn(async (_deviceId: string | null) => ({ ctxTime: 9.9, sampleRate: 48000 }));
+  setCapturing = vi.fn((on: boolean) => {
+    calls.push(on ? 'capture-on' : 'capture-off');
+  });
   setMuted = vi.fn((m: boolean) => {
     this.muted = m;
   });
@@ -55,6 +58,10 @@ const controller = () => ({
   play: async () => {
     calls.push('play');
     playing = true;
+  },
+  pause: () => {
+    calls.push('pause');
+    playing = false;
   },
   beginRecording: () => calls.push('begin'),
   endRecording: () => {
@@ -268,5 +275,82 @@ describe('10 minute cap', () => {
     expect(recorder.stop).toHaveBeenCalledTimes(1);
     expect(onAutoStop.mock.calls[0]?.[0]).toMatchObject({ status: 'encoding' });
     expect(recording.getState().status).toBe('idle');
+  });
+});
+
+describe('RecordingSession pause and resume', () => {
+  it('pause stops capture first, then freezes the backing playback', async () => {
+    const s = makeSession();
+    await s.start(input);
+    calls.length = 0;
+    s.pause();
+    expect(calls).toEqual(['capture-off', 'pause']);
+    expect(recording.getState().status).toBe('paused');
+  });
+
+  it('resume plays the backing again, then turns capture back on', async () => {
+    const s = makeSession();
+    await s.start(input);
+    s.pause();
+    calls.length = 0;
+    await s.resume();
+    expect(calls).toEqual(['play', 'capture-on']);
+    expect(recording.getState().status).toBe('recording');
+  });
+
+  it('keeps one draft: the take continues where it paused, with no silence for the pause', async () => {
+    const s = makeSession();
+    await s.start(input);
+    recorder.emit(100, 0.1);
+    s.pause();
+    await s.resume();
+    recorder.emit(50, 0.2);
+    await s.stop();
+    const drafts = await store.listDrafts(1);
+    expect(drafts).toHaveLength(1);
+    expect((await store.loadSamples(drafts[0]?.id as string)).samples).toHaveLength(150);
+  });
+
+  it('ignores pause when not recording, and resume when not paused', async () => {
+    const s = makeSession();
+    s.pause();
+    await s.resume();
+    expect(calls).toEqual([]);
+    await s.start(input);
+    calls.length = 0;
+    await s.resume();
+    expect(calls).toEqual([]);
+    s.pause();
+    s.pause();
+    expect(calls.filter((c) => c === 'pause')).toHaveLength(1);
+  });
+
+  it('finishing while paused keeps the take and ends the recording once', async () => {
+    const s = makeSession();
+    await s.start(input);
+    recorder.emit(100);
+    s.pause();
+    const [a, b] = await Promise.all([s.stop(), s.stop()]);
+    expect(a.id).toBe(b.id);
+    expect(stopped).toHaveLength(1);
+    expect(calls.filter((c) => c === 'end')).toHaveLength(1);
+    expect(recording.getState().status).toBe('idle');
+  });
+
+  it('a mute set before pausing stays set after resume', async () => {
+    const s = makeSession();
+    await s.start(input);
+    s.setMuted(true);
+    s.pause();
+    await s.resume();
+    expect(recording.getState().muted).toBe(true);
+  });
+
+  it('stopIfRecording also ends a paused take', async () => {
+    const s = makeSession();
+    await s.start(input);
+    s.pause();
+    s.stopIfRecording();
+    await vi.waitFor(() => expect(stopped).toHaveLength(1));
   });
 });

@@ -6,10 +6,14 @@ Open questions to revisit.
 - ~~Exact caps~~ → resolved in Q10
 - ~~Soft delete / trash~~ → resolved: stretch goal
 
+## V2 recording and editing
+
+Feedback captured **2026-10-03** after the user reported the MVP finished: bottom recording modal, start-time controls, multiple sections / re-recording within a track, and section editing / combining. Requirements are in PRD §9.1; the detailed proposal and decision table are in [`tasks/STRETCH.md`](./tasks/STRETCH.md#v2--recording-and-track-editing-feedback). Resolve those questions and delivery priority before implementation; this document links there to keep the V2 design in one place.
+
 ## Stretch goals (parked)
 - Soft delete / trash — stretch (resolved, see CONCLUDE.md)
 - Automatic latency detection/compensation — stretch
-- Punch-in recording — out of v1
+- Punch-in recording — out of v1; now part of the V2 sectional re-recording exploration above
 - Vocal/stem separation (Demucs/Spleeter etc.) — stretch
 - Pitch curve / live pitch display for harmony accuracy — stretch idea (confirm)
 - Pitch-preserving playback speed — stretch

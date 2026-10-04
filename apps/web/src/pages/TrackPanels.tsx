@@ -6,16 +6,17 @@ import { apiFetch } from '../api/client';
 import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftView } from '../audio/recorder/draftView';
-import { recordingStore } from '../audio/recorder/recordingStore';
+import { isTakeOpen, recordingStore } from '../audio/recorder/recordingStore';
 import { moveBefore, moveByOffset } from '../lib/reorder';
+import { latencyForStart, startTimeOf } from '../lib/startTime';
 import { LANE_HEIGHT, LANE_MARGIN, RULER_HEIGHT } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
 import { LabelChip } from '../ui/LabelChip';
 import { DraftPanel } from './DraftPanel';
 import { LabelEditor } from './LabelEditor';
-import { LatencyControl } from './LatencyControl';
 import { MixControls } from './MixControls';
+import { StartTimeControl } from './StartTimeControl';
 
 export function TrackPanels({
   project,
@@ -39,7 +40,7 @@ export function TrackPanels({
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
   const dragId = useRef<number | null>(null);
-  const isRecording = useStore(recordingStore, (s) => s.status === 'recording');
+  const isRecording = useStore(recordingStore, (s) => isTakeOpen(s.status));
 
   const patchTrack = (id: number, updated: TrackDto) =>
     qc.setQueryData<ProjectDetail>(key, (old) =>
@@ -245,9 +246,10 @@ function TrackPanel({
           🗑
         </button>
       </MixControls>
-      <LatencyControl
-        value={track.latencyOffsetMs}
-        onChange={onLatency}
+      <StartTimeControl
+        value={startTimeOf(track)}
+        home={track.startOffsetMs}
+        onChange={(startMs) => onLatency(latencyForStart(track, startMs))}
         onPreview={() => void getAudioController().previewAround()}
       />
       <LabelEditor

@@ -8,7 +8,8 @@ import { draftEngineId } from '../audio/recorder/draftView';
 import { EncodeStatus } from '../audio/recorder/EncodeStatus';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
-import { recordingStore } from '../audio/recorder/recordingStore';
+import { RecordingSheet } from '../audio/recorder/RecordingSheet';
+import { isTakeOpen, recordingStore } from '../audio/recorder/recordingStore';
 import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
 import { useDrafts } from '../audio/recorder/useDrafts';
 import { useLeaveGuard } from '../audio/recorder/useLeaveGuard';
@@ -53,7 +54,7 @@ export function ProjectPage() {
   // that hook's cleanup pauses and rewinds.
   useEffect(
     () => () => {
-      if (recordingStore.getState().status === 'recording') getRecordingSession().stopIfRecording();
+      if (isTakeOpen(recordingStore.getState().status)) getRecordingSession().stopIfRecording();
     },
     [],
   );
@@ -115,6 +116,7 @@ export function ProjectPage() {
         <LevelMeter />
       </div>
       <EncodeStatus />
+      <RecordingSheet />
       <div className="workspace-heading">
         <div>
           <h2>Tracks &amp; timeline</h2>

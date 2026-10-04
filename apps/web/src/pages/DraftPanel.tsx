@@ -5,11 +5,12 @@ import type { DraftStore } from '../audio/recorder/draftStore';
 import type { DraftView } from '../audio/recorder/draftView';
 import { savePerformer } from '../audio/recorder/performer';
 import { getDraftStore } from '../audio/recorder/storeInstance';
+import { latencyForStart, startTimeOf } from '../lib/startTime';
 import { LANE_HEIGHT, LANE_MARGIN } from '../timeline/Timeline';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EditableText } from '../ui/EditableText';
-import { LatencyControl } from './LatencyControl';
 import { MixControls } from './MixControls';
+import { StartTimeControl } from './StartTimeControl';
 
 interface Props {
   draft: DraftView;
@@ -110,9 +111,10 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
           🗑
         </button>
       </MixControls>
-      <LatencyControl
-        value={draft.latencyOffsetMs}
-        onChange={onLatency}
+      <StartTimeControl
+        value={startTimeOf(draft)}
+        home={draft.startOffsetMs}
+        onChange={(startMs) => onLatency(latencyForStart(draft, startMs))}
         onPreview={() => void getAudioController().previewAround()}
       />
       <ConfirmDialog
