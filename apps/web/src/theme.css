@@ -1014,11 +1014,19 @@ p {
   font-size: 10px;
 }
 .panel-start {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.panel-start .start-row,
+.panel-start .start-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+.panel-start .start-actions .hint {
+  margin-right: auto;
 }
 .panel-start .hint {
   font-size: 9px;
@@ -1032,8 +1040,13 @@ p {
   border-radius: 6px;
   font-size: 10px;
 }
+.panel-start .start-row button {
+  flex: none;
+}
 .panel-start .start-time {
-  width: 74px;
+  flex: 1;
+  min-width: 0;
+  width: 0;
   padding: 3px 2px;
   border: 1px solid var(--stroke);
   border-radius: 4px;

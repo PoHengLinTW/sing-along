@@ -36,76 +36,73 @@ export function StartTimeControl({ value, home, onChange, onPreview }: Props) {
     else setText(formatStartTime(value));
   };
 
+  const nudge = (n: (typeof NUDGES)[number]) => (
+    <button
+      key={n.label}
+      type="button"
+      aria-label={n.label}
+      onClick={() => onChange(value + n.delta)}
+    >
+      {n.text}
+    </button>
+  );
+
   return (
     <div className="panel-start">
-      <span className="hint">Start</span>
-      {NUDGES.slice(0, 2).map((n) => (
-        <button
-          key={n.label}
-          type="button"
-          aria-label={n.label}
-          onClick={() => onChange(value + n.delta)}
-        >
-          {n.text}
-        </button>
-      ))}
-      <input
-        type="text"
-        className="start-time"
-        aria-label="Start time"
-        aria-invalid={invalid}
-        inputMode="decimal"
-        spellCheck={false}
-        value={text}
-        onFocus={(e) => e.currentTarget.select()}
-        onChange={(e) => {
-          setEditing(true);
-          setText(e.target.value);
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            commit();
-          } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-            e.preventDefault();
-            const step = e.shiftKey ? NUDGE_COARSE_MS : NUDGE_FINE_MS;
-            onChange(value + (e.key === 'ArrowUp' ? step : -step));
-          } else if (e.key === 'Escape') {
-            setEditing(false);
-            setText(formatStartTime(value));
-          }
-        }}
-      />
-      {NUDGES.slice(2).map((n) => (
-        <button
-          key={n.label}
-          type="button"
-          aria-label={n.label}
-          onClick={() => onChange(value + n.delta)}
-        >
-          {n.text}
-        </button>
-      ))}
-      <button
-        type="button"
-        aria-label="Reset start time"
-        title={`Back to ${formatStartTime(home)}`}
-        disabled={value === home}
-        onClick={() => onChange(home)}
-      >
-        ⟲
-      </button>
-      {onPreview && (
+      <div className="start-row">
+        {NUDGES.slice(0, 2).map(nudge)}
+        <input
+          type="text"
+          className="start-time"
+          aria-label="Start time"
+          aria-invalid={invalid}
+          inputMode="decimal"
+          spellCheck={false}
+          value={text}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            setEditing(true);
+            setText(e.target.value);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              const step = e.shiftKey ? NUDGE_COARSE_MS : NUDGE_FINE_MS;
+              onChange(value + (e.key === 'ArrowUp' ? step : -step));
+            } else if (e.key === 'Escape') {
+              setEditing(false);
+              setText(formatStartTime(value));
+            }
+          }}
+        />
+        {NUDGES.slice(2).map(nudge)}
+      </div>
+      <div className="start-actions">
+        <span className="hint">Start time</span>
         <button
           type="button"
-          aria-label="Loop around here"
-          title="Play the 4 s around the playhead on repeat, to judge the alignment"
-          onClick={onPreview}
+          aria-label="Reset start time"
+          title={`Back to ${formatStartTime(home)}`}
+          disabled={value === home}
+          onClick={() => onChange(home)}
         >
-          ↻ 4 s
+          ⟲ Reset
         </button>
-      )}
+        {onPreview && (
+          <button
+            type="button"
+            aria-label="Loop around here"
+            title="Play the 4 s around the playhead on repeat, to judge the alignment"
+            onClick={onPreview}
+          >
+            ↻ 4 s
+          </button>
+        )}
+      </div>
     </div>
   );
 }
