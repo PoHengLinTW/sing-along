@@ -1013,28 +1013,39 @@ p {
   color: var(--subtle);
   font-size: 10px;
 }
-.panel-latency {
+.panel-start {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
 }
-.panel-latency input[type="range"] {
-  flex: 1;
-  min-width: 35px;
-  accent-color: #9cc7e8;
+.panel-start .hint {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--subtle);
 }
-.panel-latency .latency-number {
-  width: 48px;
-  padding: 2px;
+.panel-start button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.panel-start .start-time {
+  width: 74px;
+  padding: 3px 2px;
   border: 1px solid var(--stroke);
   border-radius: 4px;
   background: #222d2e;
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
-.panel-latency .hint {
-  font-size: 9px;
+.panel-start .start-time[aria-invalid="true"] {
+  border-color: var(--coral);
+  color: var(--coral);
 }
 .draft-panel {
   background: #222a2b;
@@ -1298,5 +1309,100 @@ dialog input:focus {
   .upload-panel > label input[type="file"] {
     display: block;
     margin-top: 12px;
+  }
+}
+
+/* Recording sheet */
+.recording-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+  border: 1px solid var(--stroke);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 -14px 40px #0009;
+  animation: sheet-up 180ms ease-out;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-sheet {
+    animation: none;
+  }
+}
+.recording-sheet .sheet-status {
+  margin: 0;
+  color: var(--coral);
+  font-size: 13px;
+  font-weight: 800;
+}
+.recording-sheet .sheet-wave {
+  width: 100%;
+  height: 88px;
+  border-radius: 10px;
+  background: #151b1e;
+  color: var(--coral);
+}
+.recording-sheet .sheet-times {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.recording-sheet .sheet-times dt {
+  color: var(--subtle);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.recording-sheet .sheet-times dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 750;
+}
+.recording-sheet .sheet-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.recording-sheet .sheet-level meter {
+  width: 160px;
+  height: 7px;
+  accent-color: var(--mint);
+}
+.recording-sheet .sheet-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.recording-sheet .sheet-controls button {
+  min-height: 48px;
+  font-size: 13px;
+}
+.recording-sheet .sheet-controls button.record {
+  border-color: #9d6259;
+  background: var(--coral);
+  color: #2c1918;
+}
+.recording-sheet .sheet-controls button.mic-mute.muted {
+  background: #6a3a38;
+  border-color: var(--coral);
+  color: #ffe3db;
+}
+@media (max-width: 560px) {
+  .recording-sheet .sheet-controls {
+    grid-template-columns: 1fr;
   }
 }
