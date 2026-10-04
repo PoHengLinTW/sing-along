@@ -1489,3 +1489,58 @@ dialog input:focus {
   margin: 0;
   flex: none;
 }
+
+/* Trim handles on a local take */
+.trim-handle {
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  z-index: 4;
+  width: 14px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #a9e5c02e;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.trim-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--mint);
+}
+.trim-handle.start {
+  left: 0;
+  border-radius: 8px 0 0 8px;
+}
+.trim-handle.end {
+  right: 0;
+  border-radius: 0 8px 8px 0;
+}
+.trim-handle:hover:not(:disabled),
+.trim-handle:focus-visible,
+.lane.trimming .trim-handle {
+  background: #a9e5c066;
+}
+.trim-preview {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(135deg, #fd836f55 0 6px, #fd836f22 6px 12px);
+  border: 1px solid var(--coral);
+}
+.trim-preview[data-edge="start"] {
+  left: 0;
+}
+.trim-preview[data-edge="end"] {
+  right: 0;
+}

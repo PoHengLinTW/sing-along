@@ -610,6 +610,20 @@ test.describe('editing local takes', () => {
       .getByLabel('Take name')
       .evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
 
+  /** Drags a trim handle of the first take by `dx` px, in small steps. */
+  async function dragHandle(page: Page, edge: 'start' | 'end', dx: number) {
+    const handle = page.locator(`[data-testid^="trim-${edge}-draft:"]`).first();
+    await handle.scrollIntoViewIfNeeded();
+    const box = await handle.boundingBox();
+    if (!box) throw new Error('no trim handle');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(x + (dx * i) / 10, y);
+    await page.mouse.up();
+  }
+
   /** Puts the playhead `px` pixels into the first draft lane (50 px/s), clear of its grip. */
   async function seekIntoDraft(page: Page, px: number) {
     const lane = page.locator('[data-testid^="lane-draft-"]').first();
@@ -628,14 +642,7 @@ test.describe('editing local takes', () => {
     await takeOf(page, 3000);
     await expect(bar(page)).toBeVisible();
     await expect(bar(page)).toContainText(/select a take/i);
-    for (const n of [
-      /split at playhead/i,
-      /trim start/i,
-      /trim end/i,
-      /combine selected/i,
-      /^undo/i,
-      /^redo/i,
-    ]) {
+    for (const n of [/split at playhead/i, /combine selected/i, /^undo/i, /^redo/i]) {
       await expect(bar(page).getByRole('button', { name: n })).toBeDisabled();
     }
   });
@@ -684,17 +691,14 @@ test.describe('editing local takes', () => {
     expect(await names(page)).toEqual(['Take 1']);
   });
 
-  test('trim end shortens the take, and the upload carries the trimmed audio', async ({
+  test('dragging the end handle trims the take, and the upload carries the trimmed audio', async ({
     page,
     request,
   }) => {
     const id = await openWithBacking(page, request, 8);
     await takeOf(page, 3500);
     await pickTake(page, 'Take 1');
-    await seekIntoDraft(page, 75);
-    await bar(page)
-      .getByRole('button', { name: /trim end to playhead/i })
-      .click();
+    await dragHandle(page, 'end', -100); // 2 s off the end of a ~3.5 s take
     await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
       timeout: 30_000,
     });
@@ -709,6 +713,66 @@ test.describe('editing local takes', () => {
     expect(take.durationMs).toBeLessThan(2300);
     // Nothing is left to undo: the take is on the server now.
     await expect(bar(page)).toHaveCount(0);
+  });
+
+  test('dragging the start handle shows what will be cut, then trims; undo restores the take', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 3500);
+    const lane = page.locator('[data-testid^="lane-draft-"]').first();
+    const before = (await lane.boundingBox())?.width ?? 0;
+    const handle = page.locator('[data-testid^="trim-start-draft:"]').first();
+    await handle.scrollIntoViewIfNeeded();
+    const box = await handle.boundingBox();
+    if (!box) throw new Error('no handle');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 6 });
+    await expect(page.locator('[data-testid^="trim-preview-draft:"]')).toBeVisible();
+    expect(await names(page)).toEqual(['Take 1']); // nothing is cut until release
+    await page.mouse.up();
+    await expect(page.locator('[data-testid^="trim-preview-draft:"]')).toHaveCount(0);
+    await expect(bar(page).getByRole('button', { name: /^undo trim start/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await expect.poll(async () => (await lane.boundingBox())?.width ?? 0).toBeLessThan(before - 40);
+    // The rest of the take stayed where it was: its start time moved forward.
+    await expect(drafts(page).first().getByRole('textbox', { name: 'Start time' })).not.toHaveValue(
+      '00:00.000',
+    );
+    await bar(page)
+      .getByRole('button', { name: /^undo trim start/i })
+      .click();
+    await expect
+      .poll(async () => Math.abs(((await lane.boundingBox())?.width ?? 0) - before))
+      .toBeLessThan(3);
+  });
+
+  test('a handle can be used from the keyboard', async ({ page, request }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 3500);
+    const lane = page.locator('[data-testid^="lane-draft-"]').first();
+    const before = (await lane.boundingBox())?.width ?? 0;
+    const handle = page.locator('[data-testid^="trim-end-draft:"]').first();
+    await handle.focus();
+    await page.keyboard.press('Shift+ArrowLeft'); // 1 s off the end
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await expect.poll(async () => (await lane.boundingBox())?.width ?? 0).toBeLessThan(before - 30);
+  });
+
+  test('a trim that would leave nothing is held at 100 ms of audio', async ({ page, request }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 3500);
+    await dragHandle(page, 'start', 600); // far past the end of the take
+    await expect(bar(page).getByRole('button', { name: /^undo trim start/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    const lane = page.locator('[data-testid^="lane-draft-"]').first();
+    await expect.poll(async () => (await lane.boundingBox())?.width ?? 999).toBeLessThan(12); // 100 ms = 5 px
   });
 
   test('combine refuses overlapping takes, then joins them once one is moved, gap as silence', async ({

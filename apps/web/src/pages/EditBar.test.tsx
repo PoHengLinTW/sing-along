@@ -14,8 +14,6 @@ let transport: ReturnType<typeof createTransportStore>;
 let recording: ReturnType<typeof createRecordingStore>;
 const editor = {
   split: vi.fn(async () => ok as never),
-  trimBefore: vi.fn(async () => ok as never),
-  trimAfter: vi.fn(async () => ok as never),
   combine: vi.fn(async () => ok as never),
   undo: vi.fn(async () => true),
   redo: vi.fn(async () => true),
@@ -49,14 +47,7 @@ beforeEach(() => {
   selection = createSelectionStore();
   transport = createTransportStore();
   recording = createRecordingStore();
-  for (const fn of [
-    editor.split,
-    editor.trimBefore,
-    editor.trimAfter,
-    editor.combine,
-    editor.undo,
-    editor.redo,
-  ]) {
+  for (const fn of [editor.split, editor.combine, editor.undo, editor.redo]) {
     fn.mockClear();
   }
   editor.split.mockResolvedValue(ok as never);
@@ -67,6 +58,12 @@ describe('EditBar visibility', () => {
     show([]);
     expect(screen.queryByRole('group', { name: /edit takes/i })).toBeNull();
   });
+  it('has no trim buttons: trimming is done with the handles on the take', () => {
+    show();
+    expect(screen.queryByRole('button', { name: /trim/i })).toBeNull();
+    expect(screen.getByText(/drag the handles/i)).toBeTruthy();
+  });
+
   it('is present with takes, and tells how to use it', () => {
     show();
     expect(screen.getByRole('group', { name: /edit takes/i })).toBeTruthy();
@@ -75,15 +72,15 @@ describe('EditBar visibility', () => {
 });
 
 describe('EditBar enabling', () => {
-  it('needs one selected take for split and trim, two or more for combine', () => {
+  it('needs one selected take to split, two or more to combine', () => {
     show();
-    for (const n of [/split/i, /trim start/i, /trim end/i, /combine/i])
-      expect(btn(n).disabled).toBe(true);
+    expect(btn(/split/i).disabled).toBe(true);
+    expect(btn(/combine/i).disabled).toBe(true);
     pick('a');
-    for (const n of [/split/i, /trim start/i, /trim end/i]) expect(btn(n).disabled).toBe(false);
+    expect(btn(/split/i).disabled).toBe(false);
     expect(btn(/combine/i).disabled).toBe(true);
     pick('b');
-    for (const n of [/split/i, /trim start/i, /trim end/i]) expect(btn(n).disabled).toBe(true);
+    expect(btn(/split/i).disabled).toBe(true);
     expect(btn(/combine/i).disabled).toBe(false);
   });
 
@@ -117,15 +114,6 @@ describe('EditBar actions at the playhead', () => {
     await waitFor(() => expect(editor.split).toHaveBeenCalledWith('b', 12346));
   });
 
-  it('Trim start and Trim end cut at the playhead', async () => {
-    show();
-    pick('b');
-    fireEvent.click(btn(/trim start/i));
-    await waitFor(() => expect(editor.trimBefore).toHaveBeenCalledWith('b', 12346));
-    fireEvent.click(btn(/trim end/i));
-    await waitFor(() => expect(editor.trimAfter).toHaveBeenCalledWith('b', 12346));
-  });
-
   it('Combine merges the selected takes and clears the selection', async () => {
     show();
     pick('c', 'a');
@@ -146,7 +134,6 @@ describe('EditBar explains refusals', () => {
   beforeEach(() => act(() => transport.setState({ position: 1 })));
   const run = async (name: RegExp, result: unknown, picked = ['a']) => {
     editor.split.mockResolvedValue(result as never);
-    editor.trimBefore.mockResolvedValue(result as never);
     editor.combine.mockResolvedValue(result as never);
     show();
     pick(...picked);
@@ -163,9 +150,7 @@ describe('EditBar explains refusals', () => {
     ).toMatch(/overlap.*1\.25 s/i);
   });
   it('a failure: says nothing was changed', async () => {
-    expect(await run(/trim start/i, { ok: false, reason: 'failed' })).toMatch(
-      /nothing was changed/i,
-    );
+    expect(await run(/split/i, { ok: false, reason: 'failed' })).toMatch(/nothing was changed/i);
   });
   it('another edit running: asks to wait', async () => {
     expect(await run(/split/i, { ok: false, reason: 'busy' })).toMatch(/wait/i);

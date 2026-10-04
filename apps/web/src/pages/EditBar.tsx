@@ -10,16 +10,13 @@ import { useToast } from '../ui/toast';
 interface Props {
   /** Ids of the local takes on this page. */
   draftIds: string[];
-  editor?: Pick<
-    DraftEditor,
-    'split' | 'trimBefore' | 'trimAfter' | 'combine' | 'undo' | 'redo' | 'history'
-  >;
+  editor?: Pick<DraftEditor, 'split' | 'combine' | 'undo' | 'redo' | 'history'>;
   selection?: StoreApi<SelectionState>;
   transport?: StoreApi<TransportState>;
   recording?: StoreApi<RecordingState>;
 }
 
-const REFUSALS: Record<string, (r: EditResult & { ok: false }) => string> = {
+export const REFUSALS: Record<string, (r: EditResult & { ok: false }) => string> = {
   outside: () => 'Move the playhead inside the selected take first.',
   overlap: (r) =>
     `These takes overlap by ${((r.overlapMs ?? 0) / 1000).toFixed(2).replace(/0$/, '')} s. Trim or move one first.`,
@@ -80,7 +77,7 @@ export function EditBar({
     <fieldset className="edit-bar" aria-label="Edit takes">
       <span className="edit-hint">
         {selected.length === 0
-          ? 'Select a take with its checkbox to split or trim it at the playhead; select two or more to combine.'
+          ? 'Select a take with its checkbox to split it at the playhead; select two or more to combine. To trim a take, drag the handles at its ends.'
           : `${selected.length} selected`}
       </span>
       <div className="edit-actions">
@@ -107,22 +104,6 @@ export function EditBar({
           onClick={() => one && void run(() => ed.split(one, playheadMs()))}
         >
           Split at playhead
-        </button>
-        <button
-          type="button"
-          disabled={off || !one}
-          title="Remove the audio before the playhead; the rest stays where it is"
-          onClick={() => one && void run(() => ed.trimBefore(one, playheadMs()))}
-        >
-          Trim start to playhead
-        </button>
-        <button
-          type="button"
-          disabled={off || !one}
-          title="Remove the audio after the playhead"
-          onClick={() => one && void run(() => ed.trimAfter(one, playheadMs()))}
-        >
-          Trim end to playhead
         </button>
         <button
           type="button"

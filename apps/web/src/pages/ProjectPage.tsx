@@ -6,6 +6,7 @@ import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
 import { draftEngineId } from '../audio/recorder/draftView';
 import { EncodeStatus } from '../audio/recorder/EncodeStatus';
+import { getDraftEditor } from '../audio/recorder/edit/editor';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
 import { RecordingSheet } from '../audio/recorder/RecordingSheet';
@@ -22,7 +23,7 @@ import { latencyForStart } from '../lib/startTime';
 import { useCaps } from '../lib/useStorageUsage';
 import { Timeline, TimelineZoomControls } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
-import { EditBar } from './EditBar';
+import { EditBar, REFUSALS } from './EditBar';
 import { EmptyProject } from './EmptyProject';
 import { LabelFilterBar } from './LabelFilterBar';
 import { NotFound } from './NotFound';
@@ -149,6 +150,14 @@ export function ProjectPage() {
           showZoomControls={false}
           onTrackStart={(t, ms) => latency.setTrackLatency(t, latencyForStart(t, ms))}
           onDraftStart={(d, ms) => latency.setDraftLatency(d, latencyForStart(d, ms))}
+          onDraftTrim={async (d, edge, ms) => {
+            const editor = getDraftEditor();
+            const result =
+              edge === 'start'
+                ? await editor.trimBefore(d.id, ms)
+                : await editor.trimAfter(d.id, ms);
+            if (!result.ok) toast.error(REFUSALS[result.reason]?.(result) ?? '');
+          }}
         />
       </div>
       <div className="workspace-footer">

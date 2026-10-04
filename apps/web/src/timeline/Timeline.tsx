@@ -11,7 +11,15 @@ import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { waveformColor } from '../lib/labels';
 import { formatStartTime, startTimeOf } from '../lib/startTime';
-import { dragStartMs, followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
+import {
+  clampTrim,
+  dragStartMs,
+  followScrollLeft,
+  pxToSec,
+  rulerTicks,
+  secToPx,
+  zoomBy,
+} from './math';
 import { RecordingLane } from './RecordingLane';
 import { type ViewState, viewStore } from './viewStore';
 import { Waveform } from './Waveform';
@@ -32,12 +40,15 @@ interface Props {
   /** A lane's grip was dragged: its new start time on the song timeline, in ms. */
   onTrackStart?: (track: TrackDto, startMs: number) => void;
   onDraftStart?: (draft: DraftView, startMs: number) => void;
+  /** A local take's edge handle was dragged and released: cut it there (song time, ms). */
+  onDraftTrim?: (draft: DraftView, edge: 'start' | 'end', tMs: number) => void;
 }
 
 type Gesture =
   | { kind: 'scrub' }
   | { kind: 'ruler'; startX: number; moved: boolean }
   | { kind: 'edge'; edge: 'a' | 'b' }
+  | { kind: 'trim'; draftId: string; edge: 'start' | 'end' }
   | { kind: 'move'; lane: string; startX: number; startMs: number; moved: boolean };
 
 /** Pointer movement under this many px is a click, not a drag. */
@@ -83,6 +94,7 @@ export function Timeline({
   showZoomControls = true,
   onTrackStart,
   onDraftStart,
+  onDraftTrim,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -93,6 +105,11 @@ export function Timeline({
   const gesture = useRef<Gesture | null>(null);
   const [preview, setPreview] = useState<LoopRegion | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [trimPreview, setTrimPreview] = useState<{
+    draftId: string;
+    edge: 'start' | 'end';
+    ms: number;
+  } | null>(null);
   const loop = useStore(transport, (s) => s.loop);
   const loopEnabled = useStore(transport, (s) => s.loopEnabled);
   const loopA = useStore(transport, (s) => s.loopA);
@@ -192,6 +209,13 @@ export function Timeline({
       gesture.current = { kind: 'edge', edge: handle };
       return;
     }
+    const trim = target.closest('[data-trim-handle]')?.getAttribute('data-trim-handle');
+    if (trim) {
+      if (isRecording) return;
+      const [edge, draftId] = trim.split(':') as ['start' | 'end', string];
+      if (drafts.some((d) => d.id === draftId)) gesture.current = { kind: 'trim', draftId, edge };
+      return;
+    }
     const grip = target.closest('[data-lane-grip]')?.getAttribute('data-lane-grip');
     if (grip) {
       // The grip moves its lane in time; it never seeks. Locked while a take runs.
@@ -221,9 +245,23 @@ export function Timeline({
     seekAt(e.clientX);
   };
 
+  /** Where a trim gesture would cut with the pointer at `clientX`, or null if it is no trim. */
+  const trimCut = (g: Extract<Gesture, { kind: 'trim' }>, clientX: number) => {
+    const d = drafts.find((x) => x.id === g.draftId);
+    if (!d) return null;
+    const start = startTimeOf(d);
+    const ms = clampTrim(g.edge, Math.round(secAt(clientX) * 1000), start, start + d.durationMs);
+    return d && ms !== null ? { d, ms } : null;
+  };
+
   const onPointerMove = (e: React.PointerEvent) => {
     const g = gesture.current;
     if (!g || e.buttons !== 1) return;
+    if (g.kind === 'trim') {
+      const cut = trimCut(g, e.clientX);
+      setTrimPreview(cut ? { draftId: g.draftId, edge: g.edge, ms: cut.ms } : null);
+      return;
+    }
     if (g.kind === 'move') {
       const dx = e.clientX - g.startX;
       if (!g.moved && Math.abs(dx) <= CLICK_SLOP_PX) return;
@@ -255,7 +293,13 @@ export function Timeline({
     gesture.current = null;
     setPreview(null);
     setMoving(null);
+    setTrimPreview(null);
     if (!g || g.kind === 'move') return;
+    if (g.kind === 'trim') {
+      const cut = trimCut(g, e.clientX);
+      if (cut) onDraftTrim?.(cut.d, g.edge, cut.ms);
+      return;
+    }
     if (g.kind === 'ruler') {
       if (!g.moved)
         seekAt(e.clientX); // a plain click on the ruler seeks
@@ -316,6 +360,8 @@ export function Timeline({
               key={d.id}
               draft={d}
               moving={moving === `draft:${d.id}`}
+              trimPreview={trimPreview?.draftId === d.id ? trimPreview : null}
+              onTrimKey={isRecording ? undefined : onDraftTrim}
               pxPerSec={pxPerSec}
               status={status}
             />
@@ -436,11 +482,15 @@ function Lane({
 function DraftLane({
   draft,
   moving,
+  trimPreview,
+  onTrimKey,
   pxPerSec,
   status,
 }: {
   draft: DraftView;
   moving: boolean;
+  trimPreview: { edge: 'start' | 'end'; ms: number } | null;
+  onTrimKey?: (draft: DraftView, edge: 'start' | 'end', tMs: number) => void;
   pxPerSec: number;
   status: StoreApi<StatusState>;
 }) {
@@ -449,7 +499,7 @@ function DraftLane({
   const width = secToPx(draft.durationMs / 1000, pxPerSec);
   return (
     <div
-      className={moving ? 'lane draft-lane moving' : 'lane draft-lane'}
+      className={`lane draft-lane${moving ? ' moving' : ''}${trimPreview ? ' trimming' : ''}`}
       data-testid={`lane-draft-${draft.id}`}
       style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
     >
@@ -461,6 +511,42 @@ function DraftLane({
         height={LANE_HEIGHT}
       />
       <LaneGrip id={`draft:${draft.id}`} name={draft.name} startMs={startTimeOf(draft)} />
+      {trimPreview && (
+        <div
+          className="trim-preview"
+          data-testid={`trim-preview-draft:${draft.id}`}
+          data-edge={trimPreview.edge}
+          style={{
+            width: `${secToPx(
+              (trimPreview.edge === 'start'
+                ? trimPreview.ms - startTimeOf(draft)
+                : startTimeOf(draft) + draft.durationMs - trimPreview.ms) / 1000,
+              pxPerSec,
+            )}px`,
+          }}
+        />
+      )}
+      {(['start', 'end'] as const).map((edge) => (
+        <button
+          key={edge}
+          type="button"
+          className={`trim-handle ${edge}`}
+          data-testid={`trim-${edge}-draft:${draft.id}`}
+          data-trim-handle={`${edge}:${draft.id}`}
+          aria-label={`Trim the ${edge} of ${draft.name}: drag, or use the arrow keys`}
+          title={`Drag to trim the ${edge} of this take`}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 1000 : 100;
+            const from = startTimeOf(draft);
+            const to = from + draft.durationMs;
+            const inward = edge === 'start' ? 'ArrowRight' : 'ArrowLeft';
+            if (e.key !== inward) return;
+            e.preventDefault();
+            const cut = clampTrim(edge, edge === 'start' ? from + step : to - step, from, to);
+            if (cut !== null) onTrimKey?.(draft, edge, cut);
+          }}
+        />
+      ))}
       <span className="draft-badge lane-badge">Draft</span>
       {state === 'error' && (
         <div role="status" className="lane-status">

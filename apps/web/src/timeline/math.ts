@@ -12,6 +12,28 @@ export const secToPx = (sec: number, pxPerSec: number) => sec * pxPerSec;
 export const dragStartMs = (startMs: number, dxPx: number, pxPerSec: number) =>
   Math.max(Math.min(0, startMs), Math.round(startMs + (dxPx / pxPerSec) * 1000));
 
+/** The least a trim leaves of a take. */
+export const MIN_TAKE_MS = 100;
+
+/**
+ * Where a trim handle dragged to `tMs` cuts a take spanning `startMs`..`endMs`, or null when it is
+ * not a trim (dragged outward, not moved, or the take is too short). Always leaves 100 ms.
+ */
+export function clampTrim(
+  edge: 'start' | 'end',
+  tMs: number,
+  startMs: number,
+  endMs: number,
+): number | null {
+  if (endMs - startMs < 2 * MIN_TAKE_MS) return null;
+  if (edge === 'start') {
+    const cut = Math.min(tMs, endMs - MIN_TAKE_MS);
+    return cut > startMs ? cut : null;
+  }
+  const cut = Math.max(tMs, startMs + MIN_TAKE_MS);
+  return cut < endMs ? cut : null;
+}
+
 export const pxToSec = (px: number, pxPerSec: number) => Math.max(0, px / pxPerSec);
 
 const pad2 = (n: number) => String(n).padStart(2, '0');

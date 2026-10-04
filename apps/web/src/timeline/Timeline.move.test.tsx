@@ -175,3 +175,111 @@ describe('dragging a lane to set its start time', () => {
     expect(screen.getByTestId('lane-1').className).not.toMatch(/moving/);
   });
 });
+
+describe('trim handles on a local take', () => {
+  const onDraftTrim = vi.fn();
+  const handle = (edge: 'start' | 'end') => screen.getByTestId(`trim-${edge}-draft:abc`);
+  // the draft starts at 1 s and lasts 3 s: its lane spans 1 s .. 4 s = 50 .. 200 px at 50 px/s
+  function setupTrim(drafts: DraftView[] = [draft]) {
+    const view = createViewStore();
+    view.setState({ pxPerSec: 50 });
+    recording = createRecordingStore();
+    return render(
+      <Timeline
+        tracks={[]}
+        drafts={drafts}
+        controller={controller as never}
+        transport={createTransportStore()}
+        view={view}
+        status={createStatusStore()}
+        recording={recording}
+        onDraftTrim={onDraftTrim}
+      />,
+    );
+  }
+  beforeEach(() => onDraftTrim.mockClear());
+
+  it('a local take has a handle at each end, and an uploaded track has none', () => {
+    setupTrim();
+    expect(handle('start').getAttribute('aria-label')).toMatch(/trim the start of/i);
+    expect(handle('end').getAttribute('aria-label')).toMatch(/trim the end of/i);
+    expect(screen.queryByTestId('trim-start-track:1')).toBeNull();
+  });
+
+  it('dragging the start handle trims there when it is released, not before', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerMove(handle('start'), { clientX: 100, buttons: 1 }); // 2 s
+    expect(onDraftTrim).not.toHaveBeenCalled();
+    fireEvent.pointerUp(handle('start'), { clientX: 100 });
+    expect(onDraftTrim).toHaveBeenCalledWith(expect.objectContaining({ id: 'abc' }), 'start', 2000);
+  });
+
+  it('dragging the end handle trims the end', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('end'), { clientX: 200, buttons: 1 });
+    fireEvent.pointerMove(handle('end'), { clientX: 150, buttons: 1 }); // 3 s
+    fireEvent.pointerUp(handle('end'), { clientX: 150 });
+    expect(onDraftTrim).toHaveBeenCalledWith(expect.objectContaining({ id: 'abc' }), 'end', 3000);
+  });
+
+  it('shows what will be cut while dragging, and removes it afterwards', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerMove(handle('start'), { clientX: 100, buttons: 1 });
+    const cut = screen.getByTestId('trim-preview-draft:abc');
+    expect(cut.getAttribute('data-edge')).toBe('start');
+    expect(cut.style.width).toBe('50px'); // 1 s .. 2 s
+    expect(screen.getByTestId('lane-draft-abc').className).toMatch(/trimming/);
+    fireEvent.pointerUp(handle('start'), { clientX: 100 });
+    expect(screen.queryByTestId('trim-preview-draft:abc')).toBeNull();
+  });
+
+  it('a click without dragging trims nothing, and a drag outward trims nothing', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerUp(handle('start'), { clientX: 50 });
+    fireEvent.pointerDown(handle('end'), { clientX: 200, buttons: 1 });
+    fireEvent.pointerMove(handle('end'), { clientX: 260, buttons: 1 });
+    fireEvent.pointerUp(handle('end'), { clientX: 260 });
+    expect(onDraftTrim).not.toHaveBeenCalled();
+  });
+
+  it('keeps 100 ms of the take however far the handle is dragged', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerMove(handle('start'), { clientX: 700, buttons: 1 });
+    fireEvent.pointerUp(handle('start'), { clientX: 700 });
+    expect(onDraftTrim).toHaveBeenCalledWith(expect.anything(), 'start', 3900);
+  });
+
+  it('does not move the playhead or the lane', () => {
+    setupTrim();
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerMove(handle('start'), { clientX: 100, buttons: 1 });
+    fireEvent.pointerUp(handle('start'), { clientX: 100 });
+    expect(controller.seek).not.toHaveBeenCalled();
+    expect(onDraftStart).not.toHaveBeenCalled();
+  });
+
+  it('is locked while a take is open', () => {
+    setupTrim();
+    act(() => recording.setState({ status: 'recording' }));
+    fireEvent.pointerDown(handle('start'), { clientX: 50, buttons: 1 });
+    fireEvent.pointerMove(handle('start'), { clientX: 100, buttons: 1 });
+    fireEvent.pointerUp(handle('start'), { clientX: 100 });
+    expect(onDraftTrim).not.toHaveBeenCalled();
+  });
+
+  it('works from the keyboard: arrows move the handle inward by 100 ms, Shift by 1 s', () => {
+    setupTrim();
+    fireEvent.keyDown(handle('start'), { key: 'ArrowRight' });
+    expect(onDraftTrim).toHaveBeenLastCalledWith(expect.anything(), 'start', 1100);
+    fireEvent.keyDown(handle('end'), { key: 'ArrowLeft', shiftKey: true });
+    expect(onDraftTrim).toHaveBeenLastCalledWith(expect.anything(), 'end', 3000);
+    onDraftTrim.mockClear();
+    fireEvent.keyDown(handle('start'), { key: 'ArrowLeft' }); // outward: nothing to restore
+    fireEvent.keyDown(handle('end'), { key: 'ArrowRight' });
+    expect(onDraftTrim).not.toHaveBeenCalled();
+  });
+});
