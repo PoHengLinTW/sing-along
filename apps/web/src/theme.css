@@ -1419,3 +1419,37 @@ dialog input:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dragging a lane in time */
+.lane-grip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  background: #111519b3;
+  color: var(--subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.lane-grip:hover,
+.lane.moving .lane-grip {
+  background: #365244e6;
+  color: var(--mint);
+}
+.lane.moving {
+  border-color: var(--mint);
+}
+.lane.moving .lane-grip {
+  cursor: grabbing;
+}
+.lane-badge {
+  top: 28px;
+}

@@ -517,6 +517,94 @@ test.describe('start time of an uploaded track', () => {
   });
 });
 
+test.describe('dragging a lane to set its start time', () => {
+  /** Drags the lane's grip by `dx` px with the mouse, in small steps. */
+  async function dragGrip(page: Page, testId: string, dx: number) {
+    await page.getByTestId(testId).scrollIntoViewIfNeeded();
+    const box = await page.getByTestId(testId).boundingBox();
+    if (!box) throw new Error('grip not visible');
+    const x = box.x + 30;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(x + (dx * i) / 10, y);
+    await page.mouse.up();
+  }
+
+  test('dragging an uploaded track moves it, updates the Start time field and saves it', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Drag'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    await page.goto(`/project/${id}`);
+    const field = page.getByTestId('panel-Alto').getByRole('textbox', { name: 'Start time' });
+    const grip = page.getByTestId('grip-track:' + (await firstTrackId(request, id)));
+    await expect(grip).toContainText('00:00.000');
+    const lane = page.getByTestId(/^lane-\d+$/).first();
+    const before = (await lane.boundingBox())?.x ?? 0;
+
+    await dragGrip(page, 'grip-track:' + (await firstTrackId(request, id)), 100); // 100 px = 2 s at 50 px/s
+    await expect(field).not.toHaveValue('00:00.000');
+    await expect(grip).toContainText(/00:0[12]\./);
+    expect(((await lane.boundingBox())?.x ?? 0) - before).toBeGreaterThan(80);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/projects/${id}`)).json()).tracks[0].latencyOffsetMs,
+        {
+          timeout: 5000,
+        },
+      )
+      .toBeGreaterThan(1500);
+    await page.reload();
+    await expect(
+      page.getByTestId('panel-Alto').getByRole('textbox', { name: 'Start time' }),
+    ).not.toHaveValue('00:00.000');
+  });
+
+  test('a drag cannot pull the track before zero, and does not move the playhead', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('DragLeft'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    await page.goto(`/project/${id}`);
+    const trackId = await firstTrackId(request, id);
+    const seconds = await currentSeconds(page);
+    await dragGrip(page, `grip-track:${trackId}`, -80);
+    await expect(
+      page.getByTestId('panel-Alto').getByRole('textbox', { name: 'Start time' }),
+    ).toHaveValue('00:00.000');
+    expect(await currentSeconds(page)).toBe(seconds);
+  });
+
+  test('a draft can be dragged too, and clicking the lane elsewhere still seeks', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 1500);
+    const draftId = (await drafts(page).first().getAttribute('data-testid'))?.replace(
+      'panel-draft-',
+      '',
+    );
+    await dragGrip(page, `grip-draft:${draftId}`, 100);
+    await expect(drafts(page).first().getByRole('textbox', { name: 'Start time' })).not.toHaveValue(
+      '00:00.000',
+    );
+    const lane = page.getByTestId('lane-Backing').or(page.getByTestId(/^lane-\d+$/).first());
+    const box = await lane.boundingBox();
+    if (!box) throw new Error('no lane');
+    await page.mouse.click(box.x + 200, box.y + box.height - 20);
+    expect(await currentSeconds(page)).toBeGreaterThan(2);
+  });
+});
+
+async function firstTrackId(request: Parameters<typeof apiCreateProject>[0], projectId: number) {
+  return (await (await request.get(`/api/projects/${projectId}`)).json()).tracks[0].id as number;
+}
+
 /** The project id from the page address. */
 async function projectIdOf(page: Page): Promise<number> {
   return Number(new URL(page.url()).pathname.split('/').pop());

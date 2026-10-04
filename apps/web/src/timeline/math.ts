@@ -5,6 +5,13 @@ const MIN_TICK_SPACING_PX = 80;
 const STEPS_SEC = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
 
 export const secToPx = (sec: number, pxPerSec: number) => sec * pxPerSec;
+/**
+ * The start (ms) of a lane dragged `dxPx` from where it was picked up. Whole milliseconds, and
+ * never earlier than the song start; a start already before zero can only move forward.
+ */
+export const dragStartMs = (startMs: number, dxPx: number, pxPerSec: number) =>
+  Math.max(Math.min(0, startMs), Math.round(startMs + (dxPx / pxPerSec) * 1000));
+
 export const pxToSec = (px: number, pxPerSec: number) => Math.max(0, px / pxPerSec);
 
 const pad2 = (n: number) => String(n).padStart(2, '0');

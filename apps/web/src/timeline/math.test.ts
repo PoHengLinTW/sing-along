@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampZoom,
+  dragStartMs,
   followScrollLeft,
   formatClock,
   formatTransportTime,
@@ -93,5 +94,21 @@ describe('followScrollLeft', () => {
   it('never scrolls past the content or below zero', () => {
     expect(followScrollLeft({ ...base, scrollLeft: 8900, playheadPx: 9990 })).toBe(9000);
     expect(followScrollLeft({ ...base, scrollLeft: 100, playheadPx: 20 })).toBe(0);
+  });
+});
+
+describe('dragStartMs', () => {
+  it('moves the start by the dragged distance, in whole milliseconds', () => {
+    expect(dragStartMs(2000, 100, 50)).toBe(4000); // 100 px at 50 px/s = 2 s
+    expect(dragStartMs(2000, -25, 50)).toBe(1500);
+    expect(dragStartMs(0, 1, 800)).toBe(1); // 1.25 ms rounds to 1
+  });
+  it('does not drag a track before the song starts', () => {
+    expect(dragStartMs(500, -1000, 50)).toBe(0);
+  });
+  it('keeps a start that is already before zero from jumping when it is dragged', () => {
+    expect(dragStartMs(-300, 0, 50)).toBe(-300);
+    expect(dragStartMs(-300, -50, 50)).toBe(-300); // cannot go further back
+    expect(dragStartMs(-300, 5, 50)).toBe(-200);
   });
 });

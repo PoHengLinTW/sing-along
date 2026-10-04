@@ -10,7 +10,8 @@ import { isTakeOpen, type RecordingState, recordingStore } from '../audio/record
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { waveformColor } from '../lib/labels';
-import { followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
+import { formatStartTime, startTimeOf } from '../lib/startTime';
+import { dragStartMs, followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
 import { RecordingLane } from './RecordingLane';
 import { type ViewState, viewStore } from './viewStore';
 import { Waveform } from './Waveform';
@@ -28,12 +29,16 @@ interface Props {
   onRetryAudio?: (trackId: number) => void;
   /** The studio places zoom beside the section heading so it stays visible on narrow screens. */
   showZoomControls?: boolean;
+  /** A lane's grip was dragged: its new start time on the song timeline, in ms. */
+  onTrackStart?: (track: TrackDto, startMs: number) => void;
+  onDraftStart?: (draft: DraftView, startMs: number) => void;
 }
 
 type Gesture =
   | { kind: 'scrub' }
   | { kind: 'ruler'; startX: number; moved: boolean }
-  | { kind: 'edge'; edge: 'a' | 'b' };
+  | { kind: 'edge'; edge: 'a' | 'b' }
+  | { kind: 'move'; lane: string; startX: number; startMs: number; moved: boolean };
 
 /** Pointer movement under this many px is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
@@ -76,6 +81,8 @@ export function Timeline({
   recording = recordingStore,
   onRetryAudio,
   showZoomControls = true,
+  onTrackStart,
+  onDraftStart,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -85,6 +92,7 @@ export function Timeline({
   const playhead = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const [preview, setPreview] = useState<LoopRegion | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const loop = useStore(transport, (s) => s.loop);
   const loopEnabled = useStore(transport, (s) => s.loopEnabled);
   const loopA = useStore(transport, (s) => s.loopA);
@@ -184,6 +192,26 @@ export function Timeline({
       gesture.current = { kind: 'edge', edge: handle };
       return;
     }
+    const grip = target.closest('[data-lane-grip]')?.getAttribute('data-lane-grip');
+    if (grip) {
+      // The grip moves its lane in time; it never seeks. Locked while a take runs.
+      if (isRecording) return;
+      const [type, id] = grip.split(':');
+      const item =
+        type === 'track'
+          ? tracks.find((t) => String(t.id) === id)
+          : drafts.find((d) => d.id === id);
+      if (!item) return;
+      gesture.current = {
+        kind: 'move',
+        lane: grip,
+        startX: e.clientX,
+        startMs: startTimeOf(item),
+        moved: false,
+      };
+      setMoving(grip);
+      return;
+    }
     view.setState({ follow: true }); // a seek re-enables following
     if (target.closest('[data-testid="ruler"]')) {
       gesture.current = { kind: 'ruler', startX: e.clientX, moved: false };
@@ -196,7 +224,20 @@ export function Timeline({
   const onPointerMove = (e: React.PointerEvent) => {
     const g = gesture.current;
     if (!g || e.buttons !== 1) return;
-    if (g.kind === 'scrub') seekAt(e.clientX);
+    if (g.kind === 'move') {
+      const dx = e.clientX - g.startX;
+      if (!g.moved && Math.abs(dx) <= CLICK_SLOP_PX) return;
+      g.moved = true;
+      const [type, id] = g.lane.split(':');
+      const startMs = dragStartMs(g.startMs, dx, view.getState().pxPerSec);
+      if (type === 'track') {
+        const t = tracks.find((x) => String(x.id) === id);
+        if (t) onTrackStart?.(t, startMs);
+      } else {
+        const d = drafts.find((x) => x.id === id);
+        if (d) onDraftStart?.(d, startMs);
+      }
+    } else if (g.kind === 'scrub') seekAt(e.clientX);
     else if (g.kind === 'ruler') {
       if (Math.abs(e.clientX - g.startX) > CLICK_SLOP_PX) g.moved = true;
       if (g.moved) {
@@ -213,7 +254,8 @@ export function Timeline({
     const g = gesture.current;
     gesture.current = null;
     setPreview(null);
-    if (!g) return;
+    setMoving(null);
+    if (!g || g.kind === 'move') return;
     if (g.kind === 'ruler') {
       if (!g.moved)
         seekAt(e.clientX); // a plain click on the ruler seeks
@@ -263,13 +305,20 @@ export function Timeline({
             <Lane
               key={track.id}
               track={track}
+              moving={moving === `track:${track.id}`}
               pxPerSec={pxPerSec}
               status={status}
               onRetry={onRetryAudio}
             />
           ))}
           {drafts.map((d) => (
-            <DraftLane key={d.id} draft={d} pxPerSec={pxPerSec} status={status} />
+            <DraftLane
+              key={d.id}
+              draft={d}
+              moving={moving === `draft:${d.id}`}
+              pxPerSec={pxPerSec}
+              status={status}
+            />
           ))}
           {showLiveLane && (
             <div
@@ -314,13 +363,31 @@ export function Timeline({
   );
 }
 
+/** The strip on top of a lane that is dragged to move it in time. */
+function LaneGrip({ id, name, startMs }: { id: string; name: string; startMs: number }) {
+  return (
+    <div
+      className="lane-grip"
+      data-testid={`grip-${id}`}
+      data-lane-grip={id}
+      role="presentation"
+      aria-label={`Move ${name} in time: drag, or type its Start time in the panel`}
+      title="Drag to move this track in time"
+    >
+      <span aria-hidden="true">⠿</span> {formatStartTime(startMs)}
+    </div>
+  );
+}
+
 function Lane({
   track,
+  moving,
   pxPerSec,
   status,
   onRetry,
 }: {
   track: TrackDto;
+  moving: boolean;
   pxPerSec: number;
   status: StoreApi<StatusState>;
   onRetry?: (trackId: number) => void;
@@ -331,7 +398,7 @@ function Lane({
   const color = waveformColor(track);
   return (
     <div
-      className="lane"
+      className={moving ? 'lane moving' : 'lane'}
       data-testid={`lane-${track.id}`}
       style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
     >
@@ -342,6 +409,7 @@ function Lane({
         color={color}
         height={LANE_HEIGHT}
       />
+      <LaneGrip id={`track:${track.id}`} name={track.name} startMs={startTimeOf(track)} />
       {state !== 'ready' && (
         <div role="status" className="lane-status">
           {state === 'error' ? (
@@ -367,10 +435,12 @@ function Lane({
 
 function DraftLane({
   draft,
+  moving,
   pxPerSec,
   status,
 }: {
   draft: DraftView;
+  moving: boolean;
   pxPerSec: number;
   status: StoreApi<StatusState>;
 }) {
@@ -379,7 +449,7 @@ function DraftLane({
   const width = secToPx(draft.durationMs / 1000, pxPerSec);
   return (
     <div
-      className="lane draft-lane"
+      className={moving ? 'lane draft-lane moving' : 'lane draft-lane'}
       data-testid={`lane-draft-${draft.id}`}
       style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
     >
@@ -390,6 +460,7 @@ function DraftLane({
         color="#64748b"
         height={LANE_HEIGHT}
       />
+      <LaneGrip id={`draft:${draft.id}`} name={draft.name} startMs={startTimeOf(draft)} />
       <span className="draft-badge lane-badge">Draft</span>
       {state === 'error' && (
         <div role="status" className="lane-status">

@@ -18,6 +18,7 @@ import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
+import { latencyForStart } from '../lib/startTime';
 import { useCaps } from '../lib/useStorageUsage';
 import { Timeline, TimelineZoomControls } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
@@ -120,7 +121,10 @@ export function ProjectPage() {
       <div className="workspace-heading">
         <div>
           <h2>Tracks &amp; timeline</h2>
-          <p>Click a waveform to seek. Shape your mix with each track's controls.</p>
+          <p>
+            Click a waveform to seek. Drag a track's top bar to move it in time. Shape your mix with
+            each track's controls.
+          </p>
         </div>
         <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
         <TimelineZoomControls />
@@ -141,6 +145,8 @@ export function ProjectPage() {
           drafts={drafts}
           onRetryAudio={retryAudio}
           showZoomControls={false}
+          onTrackStart={(t, ms) => latency.setTrackLatency(t, latencyForStart(t, ms))}
+          onDraftStart={(d, ms) => latency.setDraftLatency(d, latencyForStart(d, ms))}
         />
       </div>
       <div className="workspace-footer">
