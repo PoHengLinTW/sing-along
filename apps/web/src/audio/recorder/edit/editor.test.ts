@@ -267,3 +267,62 @@ describe('a start time that is still being saved', () => {
     expect(back.durationMs).toBe(1000);
   });
 });
+
+describe('edits of tracks that were checked out for editing', () => {
+  it('a split keeps the link to the saved track on the first part; the second part is a new track', async () => {
+    const d = await readyDraft('Alto', 5000, ramp(1000), {
+      replacesTrackId: 5,
+      deletesTrackIds: [9],
+    });
+    await editor.split(d.id, 5400);
+    const [a, b] = await store.listDrafts(1);
+    expect(a).toMatchObject({ replacesTrackId: 5, deletesTrackIds: [9] });
+    expect(b?.replacesTrackId).toBeUndefined();
+    expect(b?.deletesTrackIds).toBeUndefined();
+  });
+
+  it('a trim keeps the link', async () => {
+    const d = await readyDraft('Alto', 5000, ramp(1000), { replacesTrackId: 5 });
+    await editor.trimBefore(d.id, 5250);
+    expect((await store.getDraft(d.id))?.replacesTrackId).toBe(5);
+  });
+
+  it('combining takes overwrites the earliest saved track and removes the other saved tracks', async () => {
+    const early = await readyDraft('A', 1000, ramp(100, 1000), { replacesTrackId: 1 });
+    const late = await readyDraft('B', 1300, ramp(100, 2000), {
+      replacesTrackId: 2,
+      deletesTrackIds: [3],
+    });
+    await editor.combine([late.id, early.id]);
+    const [merged] = await store.listDrafts(1);
+    expect(merged?.replacesTrackId).toBe(1);
+    expect([...(merged?.deletesTrackIds ?? [])].sort()).toEqual([2, 3]);
+  });
+
+  it('combining a new take with a saved one: the result is new and the saved track goes', async () => {
+    const early = await readyDraft('New', 1000, ramp(100, 1000));
+    const late = await readyDraft('Saved', 1300, ramp(100, 2000), { replacesTrackId: 2 });
+    await editor.combine([early.id, late.id]);
+    const [merged] = await store.listDrafts(1);
+    expect(merged?.replacesTrackId).toBeUndefined();
+    expect(merged?.deletesTrackIds).toEqual([2]);
+  });
+
+  it('combining plain takes adds no links', async () => {
+    const a = await readyDraft('A', 1000, ramp(100));
+    const b = await readyDraft('B', 1300, ramp(100));
+    await editor.combine([a.id, b.id]);
+    const [merged] = await store.listDrafts(1);
+    expect(merged?.deletesTrackIds).toBeUndefined();
+  });
+
+  it('undoing a combine brings back both takes with their own links', async () => {
+    const early = await readyDraft('A', 1000, ramp(100, 1000), { replacesTrackId: 1 });
+    const late = await readyDraft('B', 1300, ramp(100, 2000), { replacesTrackId: 2 });
+    await editor.combine([early.id, late.id]);
+    await editor.undo();
+    const rows = await store.listDrafts(1);
+    expect(rows.map((r) => r.replacesTrackId)).toEqual([1, 2]);
+    expect(rows.every((r) => r.deletesTrackIds === undefined)).toBe(true);
+  });
+});

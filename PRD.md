@@ -62,7 +62,7 @@ A small, trusted singing group. Anyone who has the URL can use the app. There is
   - `start_offset_ms`, `latency_offset_ms`, `duration_ms`
   - `mime_type`, `size_bytes`, `storage_key`, `peaks`
   - `source` (`upload` | `recording`), `sort_order`, `created_at`
-- **T3:** A track's **audio can't be changed** after upload. Name, performer, labels, offsets and order can be edited.
+- **T3:** A track's audio can only be changed by **editing it and saving over the original** (V2, CONCLUDE Q26): the track is checked out as a local take, edited, and an explicit, confirmed save overwrites the saved audio for everyone. Name, performer, labels, offsets and order can be edited directly.
 - **T4:** Drag tracks to change their order.
 - **T5:** Deleting a track needs a confirmation modal.
 - **T6:** Originals are stored unchanged (no transcoding).

@@ -109,3 +109,24 @@ describe('mixer bound to the engine', () => {
     expect(ctx.sources).toHaveLength(before);
   });
 });
+
+describe('mixer copy', () => {
+  it('gives another id the same volume, mute and solo, leaving the first as it was', async () => {
+    const { createMixerStore } = await import('./mixerStore');
+    const s = createMixerStore();
+    s.getState().setVolume(1, 0.4);
+    s.getState().toggleSolo(1);
+    s.getState().copy(1, -5);
+    expect(s.getState().get(-5)).toEqual({ volume: 0.4, muted: false, solo: true });
+    expect(s.getState().get(1)).toEqual({ volume: 0.4, muted: false, solo: true });
+    s.getState().setVolume(-5, 1);
+    expect(s.getState().get(1).volume).toBe(0.4);
+  });
+
+  it('does nothing when the first id has no settings yet', async () => {
+    const { createMixerStore } = await import('./mixerStore');
+    const s = createMixerStore();
+    s.getState().copy(1, -5);
+    expect(s.getState().byId).toEqual({});
+  });
+});

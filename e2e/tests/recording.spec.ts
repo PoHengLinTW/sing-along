@@ -866,6 +866,201 @@ test.describe('editing local takes', () => {
     expect(take.durationMs).toBeGreaterThan(21_500); // 20 s of timeline plus the second take
   });
 
+  const editSaved = (page: Page, name: string) =>
+    page
+      .getByTestId(`panel-${name}`)
+      .getByRole('button', { name: `Edit audio of ${name}` })
+      .click();
+  const savedTracks = async (request: Parameters<typeof apiCreateProject>[0], id: number) =>
+    (
+      (await (await request.get(`/api/projects/${id}`)).json()).tracks as {
+        id: number;
+        name: string;
+        durationMs: number;
+      }[]
+    ).sort((a, b) => a.id - b.id);
+  const saveOver = async (page: Page, name: string) => {
+    await page.getByRole('button', { name: `Save ${name} over the original` }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Overwrite' }).click();
+  };
+
+  test('a saved track is trimmed and saved over the original: same track, shorter audio, and the player plays it', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Overwrite'));
+    await apiUploadTrack(request, id, 'Alto', 8);
+    const [original] = await savedTracks(request, id);
+    await page.goto(`/project/${id}`);
+    const total = async () => {
+      const text = (await page.locator('.transport .time').first().textContent()) ?? '';
+      const m = /\/\s*(\d+):(\d+)/.exec(text);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+    };
+    await expect(page.getByTestId('panel-Alto')).toBeVisible();
+    await expect.poll(total, { timeout: 15_000 }).toBeGreaterThanOrEqual(8);
+
+    await editSaved(page, 'Alto');
+    await expect(page.getByTestId('panel-Alto')).toHaveCount(0);
+    await expect(drafts(page).first()).toContainText('Editing');
+    await expect(drafts(page).first()).toContainText(/editing a saved track/i);
+    await dragHandle(page, 'end', -150); // ~3 s off the end
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await expect.poll(total, { timeout: 15_000 }).toBeLessThanOrEqual(6);
+    expect((await savedTracks(request, id))[0]?.durationMs).toBe(original?.durationMs); // untouched so far
+
+    // The warning comes first; Cancel changes nothing.
+    await page.getByRole('button', { name: 'Save Alto over the original' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(/overwrites the saved track 'Alto' for everyone/i);
+    await expect(dialog).toContainText(/cannot be undone/i);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect((await savedTracks(request, id))[0]?.durationMs).toBe(original?.durationMs);
+
+    await saveOver(page, 'Alto');
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByTestId('panel-Alto')).toBeVisible();
+    const after = await savedTracks(request, id);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.id).toBe(original?.id);
+    expect(after[0]?.durationMs).toBeLessThan(6500);
+    expect(after[0]?.durationMs).toBeGreaterThan(3500);
+    await expect.poll(total, { timeout: 15_000 }).toBeLessThanOrEqual(6);
+
+    await page.reload();
+    await expect(page.getByTestId('panel-Alto')).toBeVisible();
+    await expect.poll(total, { timeout: 15_000 }).toBeLessThanOrEqual(6);
+  });
+
+  test('stopping an edit throws the copy away and leaves the saved track as it was', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('StopEdit'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    const [original] = await savedTracks(request, id);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await dragHandle(page, 'end', -100);
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await page.getByRole('button', { name: 'Discard Alto' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(/saved track is not changed/i);
+    await dialog.getByRole('button', { name: 'Discard edits' }).click();
+    await expect(drafts(page)).toHaveCount(0);
+    await expect(page.getByTestId('panel-Alto')).toBeVisible();
+    expect(await savedTracks(request, id)).toEqual([original]);
+  });
+
+  test('an edit in progress survives a reload, with the original still hidden', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('ReloadEdit'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await expect(drafts(page)).toHaveCount(1);
+    await page.reload();
+    await expect(drafts(page)).toHaveCount(1);
+    await expect(page.getByTestId('panel-Alto')).toHaveCount(0);
+    await expect(drafts(page).first()).toContainText('Editing');
+  });
+
+  test('splitting a saved track: the first half overwrites it, the second half becomes a new track', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('SplitSaved'));
+    await apiUploadTrack(request, id, 'Alto', 8);
+    const [original] = await savedTracks(request, id);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await pickTake(page, 'Alto');
+    await seekIntoDraft(page, 200); // 4 s in
+    await bar(page)
+      .getByRole('button', { name: /split at playhead/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Alto', 'Alto (2)']);
+
+    await saveOver(page, 'Alto');
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /upload alto \(2\)/i })
+      .click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const after = await savedTracks(request, id);
+    expect(after).toHaveLength(2);
+    expect(after[0]?.id).toBe(original?.id);
+    expect(after[0]?.name).toBe('Alto');
+    expect(after[1]?.name).toBe('Alto (2)');
+    for (const t of after) {
+      expect(t.durationMs).toBeGreaterThan(3000);
+      expect(t.durationMs).toBeLessThan(5000);
+    }
+  });
+
+  test('combining saved tracks: one is overwritten with the result, the other is deleted, after a warning', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('CombineSaved'));
+    await apiUploadTrack(request, id, 'Alto', 4);
+    await apiUploadTrack(request, id, 'Bass', 4);
+    const [first] = await savedTracks(request, id);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await editSaved(page, 'Bass');
+    await expect(drafts(page)).toHaveCount(2);
+    const bass = page
+      .getByTestId(/^panel-draft-/)
+      .nth(1)
+      .getByRole('textbox', { name: 'Start time' });
+    await bass.fill('00:10.000');
+    await bass.press('Enter');
+    await pickTake(page, 'Alto');
+    await pickTake(page, 'Bass');
+    await bar(page)
+      .getByRole('button', { name: /combine selected/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Alto']);
+
+    await page.getByRole('button', { name: 'Save Alto over the original' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(/1 other saved track/i);
+    await dialog.getByRole('button', { name: 'Overwrite' }).click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const after = await savedTracks(request, id);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.id).toBe(first?.id);
+    expect(after[0]?.durationMs).toBeGreaterThan(13_000); // 10 s of timeline plus the second track
+    await expect(page.getByTestId('panel-Bass')).toHaveCount(0);
+    await expect(page.getByTestId('panel-Alto')).toBeVisible();
+  });
+
+  test('Edit is unavailable while recording, and reordering is paused while a track is out for editing', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Paused'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    await apiUploadTrack(request, id, 'Bass', 6);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await expect(page.getByRole('button', { name: 'Move Bass up' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Edit audio of Bass' })).toBeEnabled();
+    await record(page).click();
+    await expect(page.getByRole('region', { name: 'Recording' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Edit audio of Bass' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Finish recording' }).click();
+  });
+
   test('edits and takes are locked while recording', async ({ page, request }) => {
     await openWithBacking(page, request, 8);
     await takeOf(page, 2500);

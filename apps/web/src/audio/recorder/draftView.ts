@@ -29,6 +29,8 @@ export interface DraftView {
   blob: Blob;
   /** Labels chosen for the take; sent with the upload. */
   labelIds?: number[];
+  replacesTrackId?: number;
+  deletesTrackIds?: number[];
 }
 
 /** Null while the take is still recording or encoding: only an encoded draft can be played. */
@@ -47,5 +49,7 @@ export function toDraftView(d: Draft): DraftView | null {
     peaks: d.peaks,
     blob: d.blob,
     labelIds: d.labelIds ?? [],
+    replacesTrackId: d.replacesTrackId,
+    deletesTrackIds: d.deletesTrackIds,
   };
 }

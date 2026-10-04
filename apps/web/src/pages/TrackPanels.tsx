@@ -26,6 +26,8 @@ export function TrackPanels({
   onTrackLatency,
   onDraftLatency,
   onDraftUpload,
+  onTrackEdit,
+  reorderHint = 'Clear the label filter to reorder',
 }: {
   project: ProjectDetail;
   /** The tracks to show (the label filter may hide some). Reordering always works on the full list. */
@@ -36,6 +38,10 @@ export function TrackPanels({
   onTrackLatency?: (track: TrackDto, ms: number) => void;
   onDraftLatency?: (draft: DraftView, ms: number) => void;
   onDraftUpload?: (draft: DraftView, onProgress: (fraction: number) => void) => Promise<void>;
+  /** Check a saved track out for editing (its audio is copied to a local take). */
+  onTrackEdit?: (track: TrackDto) => Promise<void>;
+  /** Why reordering is unavailable, shown on the move buttons. */
+  reorderHint?: string;
 }) {
   const qc = useQueryClient();
   const key = ['project', String(project.id)];
@@ -92,6 +98,9 @@ export function TrackPanels({
           track={track}
           projectKey={key}
           reorderDisabled={reorderDisabled}
+          reorderHint={reorderHint}
+          recording={isRecording}
+          onEdit={onTrackEdit ? () => onTrackEdit(track) : undefined}
           onSaved={(updated) => patchTrack(track.id, updated)}
           onLatency={(ms) => onTrackLatency?.(track, ms)}
           onDragStart={() => {
@@ -128,6 +137,9 @@ export function TrackPanels({
 interface PanelProps {
   track: TrackDto;
   reorderDisabled: boolean;
+  reorderHint: string;
+  recording: boolean;
+  onEdit?: () => Promise<void>;
   projectKey: (string | number)[];
   onSaved: (updated: TrackDto) => void;
   onLatency: (ms: number) => void;
@@ -140,12 +152,16 @@ function TrackPanel({
   track,
   projectKey,
   reorderDisabled,
+  reorderHint,
+  recording,
+  onEdit,
   onSaved,
   onLatency,
   onDragStart,
   onDrop,
   onMove,
 }: PanelProps) {
+  const [opening, setOpening] = useState(false);
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const [editingLabels, setEditingLabels] = useState(false);
@@ -196,11 +212,31 @@ function TrackPanel({
           onSave={(v) => save({ name: v })}
           validate={(v) => (v.trim() ? null : 'Name is required')}
         />
+        {onEdit && (
+          <button
+            type="button"
+            className="edit-track"
+            aria-label={`Edit audio of ${track.name}`}
+            title="Trim, split or combine this track's audio, then save over the original"
+            disabled={recording || opening}
+            onClick={async () => {
+              if (opening) return;
+              setOpening(true);
+              try {
+                await onEdit();
+              } finally {
+                setOpening(false);
+              }
+            }}
+          >
+            {opening ? '…' : '✂'}
+          </button>
+        )}
         <button
           type="button"
           aria-label={`Move ${track.name} up`}
           disabled={reorderDisabled}
-          title={reorderDisabled ? 'Clear the label filter to reorder' : undefined}
+          title={reorderDisabled ? reorderHint : undefined}
           onClick={() => onMove(-1)}
         >
           ↑
@@ -209,7 +245,7 @@ function TrackPanel({
           type="button"
           aria-label={`Move ${track.name} down`}
           disabled={reorderDisabled}
-          title={reorderDisabled ? 'Clear the label filter to reorder' : undefined}
+          title={reorderDisabled ? reorderHint : undefined}
           onClick={() => onMove(1)}
         >
           ↓
