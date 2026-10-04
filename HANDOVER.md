@@ -6,7 +6,7 @@ disagrees with the code, the code wins: fix this file.
 
 **Planning update (2026-10-03):** The user reports the MVP finished and requested V2 feedback documentation. See PRD §9.1, CONCLUDE Q23 and `tasks/STRETCH.md` for the recording sheet, start-time controls, sectional re-recording and editing plan. This was documentation-only work; the older milestone/QA status below has not been re-audited or newly verified. Resolve the V2 design questions before implementing it.
 
-**V2 update (2026-10-04):** the first V2 slice is built and covered by E2E (83 tests green): recording sheet with Pause/Resume/Mute/Finish, and Start time replacing the latency UI (CONCLUDE Q24). Still open from `tasks/STRETCH.md`: sections inside one track, re-record a range, editing and combining, drag-to-set start time. Not re-verified by ear or on devices.
+**V2 update (2026-10-04):** the first V2 slice is built and covered by E2E (83 tests green): recording sheet with Pause/Resume/Mute/Finish, and Start time replacing the latency UI (CONCLUDE Q24). Also built: drag a lane's grip to set its start time, and editing of local drafts (split, trim, combine, undo/redo; CONCLUDE Q25; 92 E2E tests). Still open from `tasks/STRETCH.md`: sections inside one saved track, re-record a range, editing uploaded tracks (needs a migration the user declined for now). Not re-verified by ear or on devices.
 
 ## 1. Where the project stands
 

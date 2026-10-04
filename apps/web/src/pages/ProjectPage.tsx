@@ -22,6 +22,7 @@ import { latencyForStart } from '../lib/startTime';
 import { useCaps } from '../lib/useStorageUsage';
 import { Timeline, TimelineZoomControls } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
+import { EditBar } from './EditBar';
 import { EmptyProject } from './EmptyProject';
 import { LabelFilterBar } from './LabelFilterBar';
 import { NotFound } from './NotFound';
@@ -129,6 +130,7 @@ export function ProjectPage() {
         <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
         <TimelineZoomControls />
       </div>
+      <EditBar draftIds={drafts.map((d) => d.id)} />
       {project.tracks.length === 0 && drafts.length === 0 && <EmptyProject />}
       <div className="workspace">
         <TrackPanels

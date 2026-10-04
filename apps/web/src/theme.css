@@ -1453,3 +1453,39 @@ dialog input:focus {
 .lane-badge {
   top: 28px;
 }
+
+/* Editing local takes */
+.edit-bar {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px dashed #617b86;
+  border-radius: 12px;
+  background: #1b2426;
+}
+.edit-bar .edit-hint {
+  color: var(--subtle);
+  font-size: 11px;
+}
+.edit-bar .edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.edit-bar button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.draft-panel .edit-select {
+  accent-color: var(--mint);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex: none;
+}

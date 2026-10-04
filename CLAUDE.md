@@ -32,6 +32,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `apps/web/src/audio/recorder/RecordingSheet.tsx` (bottom sheet while a take is open), `session.ts` `pause()`/`resume()`, `recordingStore.ts` (`paused` status, `isTakeOpen`), `liveWave.ts` `tailColumns`. P pauses/resumes.
 - `apps/web/src/lib/startTime.ts` and `pages/StartTimeControl.tsx`: users edit one Start time; it is stored as `latency_offset_ms` (CONCLUDE Q24). `audio/latency.ts` still holds the pending-edit store.
 
+- `audio/recorder/edit/`: `ops.ts` (pure split/trim/combine), `editor.ts` (`DraftEditor`: decode, change, encode, write), `history.ts` (undo/redo, page visit only), `selection.ts`; UI in `pages/EditBar.tsx` and the checkbox in `DraftPanel`. Local drafts only (CONCLUDE Q25). Each lane has a grip bar (`Timeline.tsx`) to drag it in time.
+
 ### Where things are (M3)
 
 - `packages/shared/src/caps.ts`: `DEFAULT_CAPS`, `ErrorCode`s, `storageUsageSchema`, `formatBytes`. The API reads overrides from env (`MAX_FILE_MB`, ...); the client learns the live caps from `GET /api/storage` (`useCaps`).

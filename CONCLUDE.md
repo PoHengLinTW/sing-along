@@ -384,3 +384,17 @@ Built from Q23's proposals; the rest of V2 (sections, retries, editing) is not s
 - **Pause:** one take, one draft. Pause turns capture off first, then freezes the backing; Resume plays, then turns capture on. The paused time adds no silence, and the take stays aligned because the playhead froze with it. Mic mute is unchanged (it records silence while time runs). Pause makes no new section: sections wait for the V2-TAKES model. Shortcut: P.
 - **Start time:** the panel edits `start_offset_ms + latency_offset_ms` as one `mm:ss.mmm` value (typing, ±10/±100 ms buttons, arrow keys, reset, loop preview). The stored data is unchanged: an edit writes `latency_offset_ms = start - start_offset_ms`, so existing tracks keep their audible placement with no migration and no API change. The stored latency range is now the API's ±600 s (was ±1 s for the slider). Reset returns to the song offset (latency 0). Before zero: a negative start is allowed and shown with a sign, as before.
 - **Not done:** dragging a lane to set the start, countdown, a preview step on the sheet (drafts already preview in the mix), device calibration.
+
+---
+
+## Q25: Editing local takes (2026-10-04)
+
+V2-EDIT, scoped by the user to **local drafts only**: no database migration, no API change, nothing shared.
+
+- **Model:** a take that is split becomes two ordinary drafts, so the sections of V2-TAKES are just drafts. Moving one is the Start time field or the lane grip; removing one is Discard. Rejected: an arrangement of clips inside one draft (needs engine changes for several segments per track) and a stored `arrangement` column (the user declined a migration).
+- **Operations** (pure maths in `audio/recorder/edit/ops.ts`): split, trim start, trim end at the playhead, and combine. A cut is whole-sample exact, the second half is placed at the cut's millisecond, and trimming keeps what is left at its song position. Combine joins takes in time order, fills gaps with silence so nothing shifts, and **refuses overlaps** (says by how much). No fades at joins yet: splits and adjacent joins are sample-exact, and unrequested fades would change the audio.
+- **Each edit re-encodes** the take to one playable file (decode, change, encode), so the draft list, the engine and the upload need no new code and the upload sends exactly what was heard. Cost: a short wait per edit, and FLAC to FLAC is lossless.
+- **Undo and redo** keep the drafts before and after each edit (blobs are immutable, so this is cheap), 30 steps, **this page visit only**. Uploading or discarding a take drops its history, so undo cannot bring it back.
+- **Pending Start time:** the editor honours a Start time edit still waiting for its 500 ms save, then clears it, so an edit right after a move works on what the user sees.
+- **Selection:** a checkbox on each draft panel; Split and Trim need exactly one, Combine two or more. The bar is locked while a take is recorded.
+- **Not done:** editing uploaded tracks (needs shared storage and revision checks), retained alternative takes, re-recording a range, fades, and undo that survives a reload.

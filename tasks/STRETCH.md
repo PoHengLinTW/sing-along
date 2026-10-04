@@ -6,6 +6,8 @@ The existing **S1–S7** stretch backlog remains below, with only **S1 — Lyric
 
 ## V2 — Recording and track editing feedback
 
+> **Status (2026-10-04):** built: the recording sheet with pause (V2-REC), Start time with drag (V2-TIME), and editing of **local drafts** only: split, trim, combine, undo/redo (V2-EDIT). Decisions in CONCLUDE Q24 and Q25. Not built: sections inside one saved track, re-recording a range, retained alternative takes, editing uploaded tracks.
+
 ### V2-REC — Recording controls in a bottom modal
 
 **Feedback:** Actions in the current UI are hard to control. When recording, a modal should grow upward from the bottom, with the live waveform above the basic controls.

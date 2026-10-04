@@ -601,6 +601,167 @@ test.describe('dragging a lane to set its start time', () => {
   });
 });
 
+test.describe('editing local takes', () => {
+  const bar = (page: Page) => page.getByRole('group', { name: 'Edit takes' });
+  const pickTake = (page: Page, name: string) =>
+    page.getByRole('checkbox', { name: `Select ${name} for editing` }).check();
+  const names = async (page: Page) =>
+    drafts(page)
+      .getByLabel('Take name')
+      .evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+
+  /** Puts the playhead `px` pixels into the first draft lane (50 px/s), clear of its grip. */
+  async function seekIntoDraft(page: Page, px: number) {
+    const lane = page.locator('[data-testid^="lane-draft-"]').first();
+    await lane.scrollIntoViewIfNeeded();
+    const box = await lane.boundingBox();
+    if (!box) throw new Error('no draft lane');
+    await page.mouse.click(box.x + px, box.y + box.height - 30);
+  }
+
+  test('the edit bar appears with the first take and tells how to use it', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 8);
+    await expect(bar(page)).toHaveCount(0);
+    await takeOf(page, 3000);
+    await expect(bar(page)).toBeVisible();
+    await expect(bar(page)).toContainText(/select a take/i);
+    for (const n of [
+      /split at playhead/i,
+      /trim start/i,
+      /trim end/i,
+      /combine selected/i,
+      /^undo/i,
+      /^redo/i,
+    ]) {
+      await expect(bar(page).getByRole('button', { name: n })).toBeDisabled();
+    }
+  });
+
+  test('split at the playhead makes two takes; undo and redo bring them back and forth', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 3500);
+    await pickTake(page, 'Take 1');
+    await seekIntoDraft(page, 75); // 1.5 s in
+    await bar(page)
+      .getByRole('button', { name: /split at playhead/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Take 1', 'Take 1 (2)']);
+    await expect(bar(page).getByRole('button', { name: /^undo split/i })).toBeEnabled();
+
+    await bar(page)
+      .getByRole('button', { name: /^undo split/i })
+      .click();
+    await expect.poll(() => names(page)).toEqual(['Take 1']);
+    await bar(page)
+      .getByRole('button', { name: /^redo split/i })
+      .click();
+    await expect.poll(() => names(page)).toEqual(['Take 1', 'Take 1 (2)']);
+  });
+
+  test('a cut with the playhead outside the take is refused and explained', async ({
+    page,
+    request,
+  }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 2500);
+    await pickTake(page, 'Take 1');
+    await page.getByRole('button', { name: 'Restart' }).click();
+    // The take starts at the playhead where it was recorded (0 s): move past its end instead.
+    const scroller = page.getByTestId('timeline-scroll');
+    const box = await scroller.boundingBox();
+    if (!box) throw new Error('no timeline');
+    await page.mouse.click(box.x + 700, box.y + 20); // ruler click: seek to ~14 s
+    await bar(page)
+      .getByRole('button', { name: /split at playhead/i })
+      .click();
+    await expect(page.getByRole('alert')).toContainText(/playhead.*inside/i);
+    expect(await names(page)).toEqual(['Take 1']);
+  });
+
+  test('trim end shortens the take, and the upload carries the trimmed audio', async ({
+    page,
+    request,
+  }) => {
+    const id = await openWithBacking(page, request, 8);
+    await takeOf(page, 3500);
+    await pickTake(page, 'Take 1');
+    await seekIntoDraft(page, 75);
+    await bar(page)
+      .getByRole('button', { name: /trim end to playhead/i })
+      .click();
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /upload take 1/i })
+      .click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const detail = await (await request.get(`/api/projects/${id}`)).json();
+    const take = detail.tracks.find((t: { source: string }) => t.source === 'recording');
+    expect(take.durationMs).toBeGreaterThan(1000);
+    expect(take.durationMs).toBeLessThan(2300);
+    // Nothing is left to undo: the take is on the server now.
+    await expect(bar(page)).toHaveCount(0);
+  });
+
+  test('combine refuses overlapping takes, then joins them once one is moved, gap as silence', async ({
+    page,
+    request,
+  }) => {
+    const id = await openWithBacking(page, request, 8);
+    await takeOf(page, 2500);
+    await takeOf(page, 2500);
+    await pickTake(page, 'Take 1');
+    await pickTake(page, 'Take 2');
+    await bar(page)
+      .getByRole('button', { name: /combine selected/i })
+      .click();
+    await expect(page.getByRole('alert')).toContainText(/overlap/i);
+    expect(await names(page)).toEqual(['Take 1', 'Take 2']);
+
+    const second = page
+      .getByTestId(/^panel-draft-/)
+      .nth(1)
+      .getByRole('textbox', { name: 'Start time' });
+    await second.fill('00:20.000');
+    await second.press('Enter');
+    await expect(second).toHaveValue('00:20.000');
+    await bar(page)
+      .getByRole('button', { name: /combine selected/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['Take 1']);
+    await expect(
+      page.getByRole('checkbox', { name: 'Select Take 1 for editing' }),
+    ).not.toBeChecked();
+
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /upload take 1/i })
+      .click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const detail = await (await request.get(`/api/projects/${id}`)).json();
+    const take = detail.tracks.find((t: { source: string }) => t.source === 'recording');
+    expect(take.durationMs).toBeGreaterThan(21_500); // 20 s of timeline plus the second take
+  });
+
+  test('edits and takes are locked while recording', async ({ page, request }) => {
+    await openWithBacking(page, request, 8);
+    await takeOf(page, 2500);
+    await pickTake(page, 'Take 1');
+    await record(page).click();
+    await expect(page.getByRole('region', { name: 'Recording' })).toBeVisible({ timeout: 15_000 });
+    await expect(bar(page).getByRole('button', { name: /split at playhead/i })).toBeDisabled();
+    await page.getByRole('button', { name: 'Finish recording' }).click();
+  });
+});
+
 async function firstTrackId(request: Parameters<typeof apiCreateProject>[0], projectId: number) {
   return (await (await request.get(`/api/projects/${projectId}`)).json()).tracks[0].id as number;
 }

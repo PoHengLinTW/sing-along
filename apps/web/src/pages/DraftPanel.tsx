@@ -3,6 +3,8 @@ import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftStore } from '../audio/recorder/draftStore';
 import type { DraftView } from '../audio/recorder/draftView';
+import { editHistory } from '../audio/recorder/edit/history';
+import { selectionStore, useSelection } from '../audio/recorder/edit/selection';
 import { savePerformer } from '../audio/recorder/performer';
 import { getDraftStore } from '../audio/recorder/storeInstance';
 import { latencyForStart, startTimeOf } from '../lib/startTime';
@@ -45,6 +47,7 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
     }
   };
   const open = async () => store ?? (await getDraftStore());
+  const selected = useSelection((s) => s.ids.includes(draft.id));
 
   return (
     <div
@@ -53,6 +56,13 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
       style={{ height: LANE_HEIGHT, margin: `${LANE_MARGIN}px 0` }}
     >
       <div className="panel-top">
+        <input
+          type="checkbox"
+          className="edit-select"
+          aria-label={`Select ${draft.name} for editing`}
+          checked={selected}
+          onChange={() => selectionStore.getState().toggle(draft.id)}
+        />
         <span className="draft-badge">Draft</span>
         <EditableText
           label="Take name"
@@ -127,6 +137,7 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
         onConfirm={async () => {
           setConfirming(false);
           await (await open()).deleteDraft(draft.id);
+          editHistory.forget(draft.id);
           mixerStore.getState().forget(draft.engineId);
         }}
       />
