@@ -9,12 +9,12 @@ import { type LevelStoreState, levelStore } from './levelStore';
 import { classifyMicError, loadMicDevice, micErrorMessage } from './mic';
 import { getInputMonitor, type InputMonitor } from './monitor';
 import { loadPerformer } from './performer';
-import { type RecordingState, recordingStore } from './recordingStore';
+import { isTakeOpen, type RecordingState, recordingStore } from './recordingStore';
 import { getRecordingSession, type RecordingSession } from './session';
 
 interface Props {
   projectId: number;
-  session?: Pick<RecordingSession, 'start' | 'stop' | 'setMuted'>;
+  session?: Pick<RecordingSession, 'start' | 'stop' | 'setMuted' | 'pause' | 'resume'>;
   recording?: StoreApi<RecordingState>;
   levels?: StoreApi<LevelStoreState>;
   monitor?: Pick<InputMonitor, 'setMuted'>;
@@ -36,17 +36,17 @@ export function RecordControls({
   const checkMuted = useStore(levels, (s) => s.muted);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const isRecording = status === 'recording';
+  const isRecording = isTakeOpen(status);
   const muted = isRecording ? takeMuted : monitoring && checkMuted;
   const canMute = isRecording || monitoring;
 
   const toggleRecording = async () => {
     const s = session ?? getRecordingSession();
     const current = recording.getState().status;
-    if (busy || (current !== 'idle' && current !== 'recording')) return;
+    if (busy || (current !== 'idle' && !isTakeOpen(current))) return;
     setBusy(true);
     try {
-      if (current === 'recording') await s.stop();
+      if (isTakeOpen(current)) await s.stop();
       else await s.start({ projectId, deviceId: loadMicDevice(), performer: loadPerformer() });
     } catch (err) {
       toast.error(micErrorMessage(classifyMicError(err as { name?: string })));
@@ -56,22 +56,30 @@ export function RecordControls({
   };
 
   const toggleMute = () => {
-    if (recording.getState().status === 'recording') {
+    if (isTakeOpen(recording.getState().status)) {
       (session ?? getRecordingSession()).setMuted(!recording.getState().muted);
     } else if (levels.getState().monitoring) {
       (monitor ?? getInputMonitor()).setMuted(!levels.getState().muted);
     }
   };
 
+  const togglePause = async () => {
+    const s = session ?? getRecordingSession();
+    const current = recording.getState().status;
+    if (current === 'recording') s.pause();
+    else if (current === 'paused') await s.resume();
+  };
+
   // The listener always calls the latest handlers, so it is attached once.
-  const latest = useRef({ toggleRecording, toggleMute });
-  latest.current = { toggleRecording, toggleMute };
+  const latest = useRef({ toggleRecording, toggleMute, togglePause });
+  latest.current = { toggleRecording, toggleMute, togglePause };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const action = recordShortcut(e);
       if (!action) return;
       e.preventDefault();
       if (action === 'record') void latest.current.toggleRecording();
+      else if (action === 'pause') void latest.current.togglePause();
       else latest.current.toggleMute();
     };
     document.addEventListener('keydown', onKey);

@@ -9,6 +9,7 @@
 
 Decision log and rationale: [`CONCLUDE.md`](./CONCLUDE.md). Open items: [`FOLLOW_UP.md`](./FOLLOW_UP.md). Task list: [`TODO.md`](./TODO.md).
 Milestone tasks with acceptance criteria: [`tasks/`](./tasks/README.md).
+Post-MVP recording and editing feedback: [`tasks/STRETCH.md`](./tasks/STRETCH.md#v2--recording-and-track-editing-feedback), captured 2026-10-03. Sections 5–8 describe the v1 baseline; §9.1 describes the requested V2 direction.
 
 ---
 
@@ -199,6 +200,18 @@ Cloudflare Tunnel ──► Fastify API ──► PostgreSQL        Cloudflare R
 6. **Per-track pan.**
 7. **Pitch display** (live and/or per-track pitch curve).
 
+### 9.1 V2 recording and editing direction
+
+After reporting the MVP finished, the user requested these improvements. They are planned requirements, not claims about current functionality. Detailed proposals, dependencies and questions live in [`tasks/STRETCH.md`](./tasks/STRETCH.md#v2--recording-and-track-editing-feedback); rationale is recorded in CONCLUDE Q23. Their priority relative to S1–S7 is open.
+
+- **V2-REC:** During recording, a modal grows upward from the bottom, with a live waveform above accessible Pause, Resume, Mic mute / Unmute and Stop / Finish controls. Define the behavior of pausing, closing the sheet and reviewing the recording before implementation.
+- **V2-TIME:** Users control each track's absolute **Start time** on the song timeline instead of a delay / latency offset. Apply this to drafts and uploaded tracks and preserve existing audible placement during migration. Moving a multi-section track preserves its sections' relative positions.
+- **V2-TAKES:** One logical track can contain multiple recording sections. Users can add sections and re-record a selected part, audition alternatives and choose a take while preserving unaffected sections. Define replacement boundaries and recovery before implementation.
+- **V2-EDIT:** Users can edit and combine sections into a coherent track. Initial proposed tools are trim, split, move, remove, take selection and undo/redo. Define gaps, overlaps, joins and whether combining requires a rendered file. Preserve source audio so edits can be revised.
+
+These extend the v1 single-file track model and R9's exclusion of punch-in. They replace A1's user-facing latency slider in V2. T3/T6's preservation of original audio remains useful, but editable arrangements will require revisiting O2's cache-by-track-ID assumption. No server audio processing or final mixdown is implied by combining sections for playback.
+
 ## 10. Open questions
 - Lyrics extras: adjustable pre-roll, "loop these lines," a global lyrics offset, in-app LRC editing. Should they be in the stretch goal?
 - Pitch display: confirm it stays a stretch idea.
+- V2: pause/close behavior, start-time boundaries and calibration, section/take model, replacement ranges, gaps/overlaps and combining versus rendering. See the V2 decision table in [`tasks/STRETCH.md`](./tasks/STRETCH.md#decisions-to-resolve-before-implementation).

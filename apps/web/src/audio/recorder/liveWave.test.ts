@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LiveWave, liveColumns } from './liveWave';
+import { LiveWave, liveColumns, tailColumns } from './liveWave';
 
 describe('liveColumns', () => {
   const wave = (blocks: [number, number][]) => ({
@@ -92,5 +92,31 @@ describe('LiveWave', () => {
     w.push(-1, 1);
     w.setTiming(0, 1000, 500);
     expect(w.count).toBe(1);
+  });
+});
+
+describe('tailColumns', () => {
+  const wave = (n: number) => ({
+    min: Array.from({ length: n }, (_, i) => -(i + 1) / 100),
+    max: Array.from({ length: n }, (_, i) => (i + 1) / 100),
+  });
+
+  it('is empty without blocks', () => {
+    expect(tailColumns(wave(0), 10, 100)).toEqual([]);
+  });
+
+  it('grows from the left while the take is shorter than the window', () => {
+    // 10-block window over 100 px: 10 px per block
+    const cols = tailColumns(wave(2), 10, 100);
+    expect(cols[0]?.x).toBe(0);
+    expect(cols.at(-1)?.x).toBe(19);
+    expect(cols).toHaveLength(20);
+  });
+
+  it('scrolls once the window is full: the newest block ends at the right edge', () => {
+    const cols = tailColumns(wave(25), 10, 100);
+    expect(cols).toHaveLength(100);
+    expect(cols.at(-1)).toEqual({ x: 99, min: -0.25, max: 0.25 });
+    expect(cols[0]).toEqual({ x: 0, min: -0.16, max: 0.16 });
   });
 });

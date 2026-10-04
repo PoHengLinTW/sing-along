@@ -2,6 +2,7 @@ import type { TrackDto } from '@sing-along/shared';
 import type { PreparedUpload } from '../../api/upload';
 import type { DraftStore } from './draftStore';
 import type { DraftView } from './draftView';
+import { editHistory } from './edit/history';
 
 interface Deps {
   upload: (p: PreparedUpload) => Promise<TrackDto>;
@@ -34,6 +35,7 @@ export async function uploadDraft(
     signal: opts.signal,
   });
   deps.onUploaded?.(track);
+  editHistory.forget(draft.id); // undo must not bring an uploaded take back
   try {
     await deps.store.deleteDraft(draft.id);
   } catch {

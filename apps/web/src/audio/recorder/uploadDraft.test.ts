@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedUpload } from '../../api/upload';
 import { DraftStore } from './draftStore';
 import { type DraftView, toDraftView } from './draftView';
+import { editHistory } from './edit/history';
 import { uploadDraft } from './uploadDraft';
 
 let store: DraftStore;
@@ -46,6 +47,14 @@ describe('uploadDraft', () => {
       form: { name: 'Take 1', performer: 'Ann', labelIds: [3] },
     });
     expect(upload.mock.calls[0]?.[0].blob.size).toBe(10);
+  });
+
+  it('uploads the edited audio, and an uploaded take can no longer be brought back by undo', async () => {
+    editHistory.clear();
+    editHistory.push({ label: 'Split', before: [{ id: view.id } as never], after: [] });
+    const upload = vi.fn(async () => track);
+    await uploadDraft({ upload, store }, view);
+    expect(editHistory.canUndo).toBe(false);
   });
 
   it('removes the draft only after the upload succeeded, and returns the new track', async () => {

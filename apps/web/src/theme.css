@@ -1013,28 +1013,52 @@ p {
   color: var(--subtle);
   font-size: 10px;
 }
-.panel-latency {
+.panel-start {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.panel-start .start-row,
+.panel-start .start-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
 }
-.panel-latency input[type="range"] {
-  flex: 1;
-  min-width: 35px;
-  accent-color: #9cc7e8;
+.panel-start .start-actions .hint {
+  margin-right: auto;
 }
-.panel-latency .latency-number {
-  width: 48px;
-  padding: 2px;
+.panel-start .hint {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--subtle);
+}
+.panel-start button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.panel-start .start-row button {
+  flex: none;
+}
+.panel-start .start-time {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  padding: 3px 2px;
   border: 1px solid var(--stroke);
   border-radius: 4px;
   background: #222d2e;
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
-.panel-latency .hint {
-  font-size: 9px;
+.panel-start .start-time[aria-invalid="true"] {
+  border-color: var(--coral);
+  color: var(--coral);
 }
 .draft-panel {
   background: #222a2b;
@@ -1299,4 +1323,224 @@ dialog input:focus {
     display: block;
     margin-top: 12px;
   }
+}
+
+/* Recording sheet */
+.recording-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+  border: 1px solid var(--stroke);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 -14px 40px #0009;
+  animation: sheet-up 180ms ease-out;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-sheet {
+    animation: none;
+  }
+}
+.recording-sheet .sheet-status {
+  margin: 0;
+  color: var(--coral);
+  font-size: 13px;
+  font-weight: 800;
+}
+.recording-sheet .sheet-wave {
+  width: 100%;
+  height: 88px;
+  border-radius: 10px;
+  background: #151b1e;
+  color: var(--coral);
+}
+.recording-sheet .sheet-times {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.recording-sheet .sheet-times dt {
+  color: var(--subtle);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.recording-sheet .sheet-times dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 750;
+}
+.recording-sheet .sheet-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.recording-sheet .sheet-level meter {
+  width: 160px;
+  height: 7px;
+  accent-color: var(--mint);
+}
+.recording-sheet .sheet-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.recording-sheet .sheet-controls button {
+  min-height: 48px;
+  font-size: 13px;
+}
+.recording-sheet .sheet-controls button.record {
+  border-color: #9d6259;
+  background: var(--coral);
+  color: #2c1918;
+}
+.recording-sheet .sheet-controls button.mic-mute.muted {
+  background: #6a3a38;
+  border-color: var(--coral);
+  color: #ffe3db;
+}
+@media (max-width: 560px) {
+  .recording-sheet .sheet-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dragging a lane in time */
+.lane-grip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  background: #111519b3;
+  color: var(--subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.lane-grip:hover,
+.lane.moving .lane-grip {
+  background: #365244e6;
+  color: var(--mint);
+}
+.lane.moving {
+  border-color: var(--mint);
+}
+.lane.moving .lane-grip {
+  cursor: grabbing;
+}
+.lane-badge {
+  top: 28px;
+}
+
+/* Editing local takes */
+.edit-bar {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px dashed #617b86;
+  border-radius: 12px;
+  background: #1b2426;
+}
+.edit-bar .edit-hint {
+  color: var(--subtle);
+  font-size: 11px;
+}
+.edit-bar .edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.edit-bar button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.draft-panel .edit-select {
+  accent-color: var(--mint);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex: none;
+}
+
+/* Trim handles on a local take */
+.trim-handle {
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  z-index: 4;
+  width: 14px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #a9e5c02e;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.trim-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--mint);
+}
+.trim-handle.start {
+  left: 0;
+  border-radius: 8px 0 0 8px;
+}
+.trim-handle.end {
+  right: 0;
+  border-radius: 0 8px 8px 0;
+}
+.trim-handle:hover:not(:disabled),
+.trim-handle:focus-visible,
+.lane.trimming .trim-handle {
+  background: #a9e5c066;
+}
+.trim-preview {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(135deg, #fd836f55 0 6px, #fd836f22 6px 12px);
+  border: 1px solid var(--coral);
+}
+.trim-preview[data-edge="start"] {
+  left: 0;
+}
+.trim-preview[data-edge="end"] {
+  right: 0;
 }

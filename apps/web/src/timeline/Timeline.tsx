@@ -6,11 +6,20 @@ import { type AudioController, getAudioController } from '../audio/controller';
 import { adjustEdge, type LoopRegion } from '../audio/loop';
 import type { DraftView } from '../audio/recorder/draftView';
 import { type LiveWave, liveWave } from '../audio/recorder/liveWave';
-import { type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
+import { isTakeOpen, type RecordingState, recordingStore } from '../audio/recorder/recordingStore';
 import { type StatusState, trackStatusStore } from '../audio/sync';
 import { type TransportState, transportStore } from '../audio/transportStore';
 import { waveformColor } from '../lib/labels';
-import { followScrollLeft, pxToSec, rulerTicks, secToPx, zoomBy } from './math';
+import { formatStartTime, startTimeOf } from '../lib/startTime';
+import {
+  clampTrim,
+  dragStartMs,
+  followScrollLeft,
+  pxToSec,
+  rulerTicks,
+  secToPx,
+  zoomBy,
+} from './math';
 import { RecordingLane } from './RecordingLane';
 import { type ViewState, viewStore } from './viewStore';
 import { Waveform } from './Waveform';
@@ -28,17 +37,24 @@ interface Props {
   onRetryAudio?: (trackId: number) => void;
   /** The studio places zoom beside the section heading so it stays visible on narrow screens. */
   showZoomControls?: boolean;
+  /** A lane's grip was dragged: its new start time on the song timeline, in ms. */
+  onTrackStart?: (track: TrackDto, startMs: number) => void;
+  onDraftStart?: (draft: DraftView, startMs: number) => void;
+  /** A local take's edge handle was dragged and released: cut it there (song time, ms). */
+  onDraftTrim?: (draft: DraftView, edge: 'start' | 'end', tMs: number) => void;
 }
 
 type Gesture =
   | { kind: 'scrub' }
   | { kind: 'ruler'; startX: number; moved: boolean }
-  | { kind: 'edge'; edge: 'a' | 'b' };
+  | { kind: 'edge'; edge: 'a' | 'b' }
+  | { kind: 'trim'; draftId: string; edge: 'start' | 'end' }
+  | { kind: 'move'; lane: string; startX: number; startMs: number; moved: boolean };
 
 /** Pointer movement under this many px is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 
-export const LANE_HEIGHT = 168;
+export const LANE_HEIGHT = 196;
 export const LANE_MARGIN = 2;
 /** Height of the ruler including its border: the track panel column starts below it. */
 export const RULER_HEIGHT = 44;
@@ -76,6 +92,9 @@ export function Timeline({
   recording = recordingStore,
   onRetryAudio,
   showZoomControls = true,
+  onTrackStart,
+  onDraftStart,
+  onDraftTrim,
 }: Props) {
   const ctl = controller ?? getAudioController();
   const pxPerSec = useStore(view, (s) => s.pxPerSec);
@@ -85,6 +104,12 @@ export function Timeline({
   const playhead = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const [preview, setPreview] = useState<LoopRegion | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
+  const [trimPreview, setTrimPreview] = useState<{
+    draftId: string;
+    edge: 'start' | 'end';
+    ms: number;
+  } | null>(null);
   const loop = useStore(transport, (s) => s.loop);
   const loopEnabled = useStore(transport, (s) => s.loopEnabled);
   const loopA = useStore(transport, (s) => s.loopA);
@@ -92,7 +117,7 @@ export function Timeline({
   const anchor = useRef<{ sec: number; x: number } | null>(null);
   const [viewport, setViewport] = useState({ left: 0, width: 0 });
 
-  const isRecording = useStore(recording, (s) => s.status === 'recording');
+  const isRecording = useStore(recording, (s) => isTakeOpen(s.status));
   // Whole seconds only: this re-renders once a second while a take grows, not on every block.
   const liveEndSec = useSyncExternalStore(
     (fn) => live.subscribe(fn),
@@ -184,6 +209,33 @@ export function Timeline({
       gesture.current = { kind: 'edge', edge: handle };
       return;
     }
+    const trim = target.closest('[data-trim-handle]')?.getAttribute('data-trim-handle');
+    if (trim) {
+      if (isRecording) return;
+      const [edge, draftId] = trim.split(':') as ['start' | 'end', string];
+      if (drafts.some((d) => d.id === draftId)) gesture.current = { kind: 'trim', draftId, edge };
+      return;
+    }
+    const grip = target.closest('[data-lane-grip]')?.getAttribute('data-lane-grip');
+    if (grip) {
+      // The grip moves its lane in time; it never seeks. Locked while a take runs.
+      if (isRecording) return;
+      const [type, id] = grip.split(':');
+      const item =
+        type === 'track'
+          ? tracks.find((t) => String(t.id) === id)
+          : drafts.find((d) => d.id === id);
+      if (!item) return;
+      gesture.current = {
+        kind: 'move',
+        lane: grip,
+        startX: e.clientX,
+        startMs: startTimeOf(item),
+        moved: false,
+      };
+      setMoving(grip);
+      return;
+    }
     view.setState({ follow: true }); // a seek re-enables following
     if (target.closest('[data-testid="ruler"]')) {
       gesture.current = { kind: 'ruler', startX: e.clientX, moved: false };
@@ -193,10 +245,37 @@ export function Timeline({
     seekAt(e.clientX);
   };
 
+  /** Where a trim gesture would cut with the pointer at `clientX`, or null if it is no trim. */
+  const trimCut = (g: Extract<Gesture, { kind: 'trim' }>, clientX: number) => {
+    const d = drafts.find((x) => x.id === g.draftId);
+    if (!d) return null;
+    const start = startTimeOf(d);
+    const ms = clampTrim(g.edge, Math.round(secAt(clientX) * 1000), start, start + d.durationMs);
+    return d && ms !== null ? { d, ms } : null;
+  };
+
   const onPointerMove = (e: React.PointerEvent) => {
     const g = gesture.current;
     if (!g || e.buttons !== 1) return;
-    if (g.kind === 'scrub') seekAt(e.clientX);
+    if (g.kind === 'trim') {
+      const cut = trimCut(g, e.clientX);
+      setTrimPreview(cut ? { draftId: g.draftId, edge: g.edge, ms: cut.ms } : null);
+      return;
+    }
+    if (g.kind === 'move') {
+      const dx = e.clientX - g.startX;
+      if (!g.moved && Math.abs(dx) <= CLICK_SLOP_PX) return;
+      g.moved = true;
+      const [type, id] = g.lane.split(':');
+      const startMs = dragStartMs(g.startMs, dx, view.getState().pxPerSec);
+      if (type === 'track') {
+        const t = tracks.find((x) => String(x.id) === id);
+        if (t) onTrackStart?.(t, startMs);
+      } else {
+        const d = drafts.find((x) => x.id === id);
+        if (d) onDraftStart?.(d, startMs);
+      }
+    } else if (g.kind === 'scrub') seekAt(e.clientX);
     else if (g.kind === 'ruler') {
       if (Math.abs(e.clientX - g.startX) > CLICK_SLOP_PX) g.moved = true;
       if (g.moved) {
@@ -213,7 +292,14 @@ export function Timeline({
     const g = gesture.current;
     gesture.current = null;
     setPreview(null);
-    if (!g) return;
+    setMoving(null);
+    setTrimPreview(null);
+    if (!g || g.kind === 'move') return;
+    if (g.kind === 'trim') {
+      const cut = trimCut(g, e.clientX);
+      if (cut) onDraftTrim?.(cut.d, g.edge, cut.ms);
+      return;
+    }
     if (g.kind === 'ruler') {
       if (!g.moved)
         seekAt(e.clientX); // a plain click on the ruler seeks
@@ -263,13 +349,22 @@ export function Timeline({
             <Lane
               key={track.id}
               track={track}
+              moving={moving === `track:${track.id}`}
               pxPerSec={pxPerSec}
               status={status}
               onRetry={onRetryAudio}
             />
           ))}
           {drafts.map((d) => (
-            <DraftLane key={d.id} draft={d} pxPerSec={pxPerSec} status={status} />
+            <DraftLane
+              key={d.id}
+              draft={d}
+              moving={moving === `draft:${d.id}`}
+              trimPreview={trimPreview?.draftId === d.id ? trimPreview : null}
+              onTrimKey={isRecording ? undefined : onDraftTrim}
+              pxPerSec={pxPerSec}
+              status={status}
+            />
           ))}
           {showLiveLane && (
             <div
@@ -314,13 +409,31 @@ export function Timeline({
   );
 }
 
+/** The strip on top of a lane that is dragged to move it in time. */
+function LaneGrip({ id, name, startMs }: { id: string; name: string; startMs: number }) {
+  return (
+    <div
+      className="lane-grip"
+      data-testid={`grip-${id}`}
+      data-lane-grip={id}
+      role="presentation"
+      aria-label={`Move ${name} in time: drag, or type its Start time in the panel`}
+      title="Drag to move this track in time"
+    >
+      <span aria-hidden="true">⠿</span> {formatStartTime(startMs)}
+    </div>
+  );
+}
+
 function Lane({
   track,
+  moving,
   pxPerSec,
   status,
   onRetry,
 }: {
   track: TrackDto;
+  moving: boolean;
   pxPerSec: number;
   status: StoreApi<StatusState>;
   onRetry?: (trackId: number) => void;
@@ -331,7 +444,7 @@ function Lane({
   const color = waveformColor(track);
   return (
     <div
-      className="lane"
+      className={moving ? 'lane moving' : 'lane'}
       data-testid={`lane-${track.id}`}
       style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
     >
@@ -342,6 +455,7 @@ function Lane({
         color={color}
         height={LANE_HEIGHT}
       />
+      <LaneGrip id={`track:${track.id}`} name={track.name} startMs={startTimeOf(track)} />
       {state !== 'ready' && (
         <div role="status" className="lane-status">
           {state === 'error' ? (
@@ -367,10 +481,16 @@ function Lane({
 
 function DraftLane({
   draft,
+  moving,
+  trimPreview,
+  onTrimKey,
   pxPerSec,
   status,
 }: {
   draft: DraftView;
+  moving: boolean;
+  trimPreview: { edge: 'start' | 'end'; ms: number } | null;
+  onTrimKey?: (draft: DraftView, edge: 'start' | 'end', tMs: number) => void;
   pxPerSec: number;
   status: StoreApi<StatusState>;
 }) {
@@ -379,7 +499,7 @@ function DraftLane({
   const width = secToPx(draft.durationMs / 1000, pxPerSec);
   return (
     <div
-      className="lane draft-lane"
+      className={`lane draft-lane${moving ? ' moving' : ''}${trimPreview ? ' trimming' : ''}`}
       data-testid={`lane-draft-${draft.id}`}
       style={{ left: `${left}px`, width: `${width}px`, height: `${LANE_HEIGHT}px` }}
     >
@@ -390,6 +510,43 @@ function DraftLane({
         color="#64748b"
         height={LANE_HEIGHT}
       />
+      <LaneGrip id={`draft:${draft.id}`} name={draft.name} startMs={startTimeOf(draft)} />
+      {trimPreview && (
+        <div
+          className="trim-preview"
+          data-testid={`trim-preview-draft:${draft.id}`}
+          data-edge={trimPreview.edge}
+          style={{
+            width: `${secToPx(
+              (trimPreview.edge === 'start'
+                ? trimPreview.ms - startTimeOf(draft)
+                : startTimeOf(draft) + draft.durationMs - trimPreview.ms) / 1000,
+              pxPerSec,
+            )}px`,
+          }}
+        />
+      )}
+      {(['start', 'end'] as const).map((edge) => (
+        <button
+          key={edge}
+          type="button"
+          className={`trim-handle ${edge}`}
+          data-testid={`trim-${edge}-draft:${draft.id}`}
+          data-trim-handle={`${edge}:${draft.id}`}
+          aria-label={`Trim the ${edge} of ${draft.name}: drag, or use the arrow keys`}
+          title={`Drag to trim the ${edge} of this take`}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 1000 : 100;
+            const from = startTimeOf(draft);
+            const to = from + draft.durationMs;
+            const inward = edge === 'start' ? 'ArrowRight' : 'ArrowLeft';
+            if (e.key !== inward) return;
+            e.preventDefault();
+            const cut = clampTrim(edge, edge === 'start' ? from + step : to - step, from, to);
+            if (cut !== null) onTrimKey?.(draft, edge, cut);
+          }}
+        />
+      ))}
       <span className="draft-badge lane-badge">Draft</span>
       {state === 'error' && (
         <div role="status" className="lane-status">

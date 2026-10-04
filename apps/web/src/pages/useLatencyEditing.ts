@@ -53,7 +53,7 @@ export function useLatencyEditing(projectId: number, tracks: TrackDto[], drafts:
   const failed = useCallback(
     (id: number) => {
       latencyStore.getState().drop([id]); // back to the saved value
-      toast.error("Couldn't save the latency offset. It was put back to its saved value.");
+      toast.error("Couldn't save the start time. It was put back to its saved value.");
     },
     [toast],
   );

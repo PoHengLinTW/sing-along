@@ -166,6 +166,21 @@ export class DraftStore {
   }
 
   /**
+   * Removes some drafts (and their raw chunks) and writes others, in one step with one
+   * notification: an edit that splits or combines takes never shows a half-done state.
+   */
+  async replaceDrafts(removeIds: string[], put: Draft[]): Promise<void> {
+    const tx = this.db.transaction(['drafts', 'chunks'], 'readwrite');
+    for (const id of removeIds) {
+      tx.objectStore('drafts').delete(id);
+      tx.objectStore('chunks').delete(chunkRange(id));
+    }
+    for (const draft of put) tx.objectStore('drafts').put(draft);
+    await done(tx);
+    this.notify();
+  }
+
+  /**
    * Drafts still marked `recording` when the page loads were cut short (crash, reload, closed tab).
    * Mark them `encoding` so the encoder finalises what was captured. Call this before starting a
    * new recording, or the live one would be picked up too.

@@ -113,6 +113,11 @@ export class Recorder {
     return this.startCapture();
   }
 
+  /** Pauses or continues the take's capture; the mic and the meter stay on. */
+  setCapturing(on: boolean): void {
+    this.link?.port.postMessage({ type: 'capture', on });
+  }
+
   setMuted(muted: boolean): void {
     this.muted = muted;
     this.link?.port.postMessage({ type: 'mute', muted });

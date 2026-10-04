@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { mixerStore } from '../audio/mixerStore';
 import { DraftStore } from '../audio/recorder/draftStore';
 import { type DraftView, toDraftView } from '../audio/recorder/draftView';
+import { editHistory } from '../audio/recorder/edit/history';
+import { selectionStore } from '../audio/recorder/edit/selection';
 import { PERFORMER_KEY } from '../audio/recorder/performer';
 import { DraftPanel } from './DraftPanel';
 
@@ -32,6 +34,32 @@ beforeEach(async () => {
   });
   view = toDraftView(ready) as DraftView;
   render(<DraftPanel draft={view} store={store} />);
+});
+
+describe('DraftPanel editing', () => {
+  beforeEach(() => {
+    selectionStore.getState().clear();
+    editHistory.clear();
+  });
+
+  it('has a checkbox that selects the take for editing', () => {
+    const box = screen.getByRole('checkbox', {
+      name: 'Select Take 1 for editing',
+    }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(selectionStore.getState().ids).toEqual([view.id]);
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(selectionStore.getState().ids).toEqual([]);
+  });
+
+  it('discarding the take also drops its edits from the undo history', async () => {
+    editHistory.push({ label: 'Split', before: [], after: [{ id: view.id } as never] });
+    fireEvent.click(screen.getByRole('button', { name: /discard take 1/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(editHistory.canUndo).toBe(false));
+  });
 });
 
 describe('DraftPanel', () => {

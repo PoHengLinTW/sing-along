@@ -40,6 +40,20 @@ export function liveColumns(
   return cols;
 }
 
+/**
+ * Columns for a fixed-width strip showing the last `windowBlocks` blocks: it fills from the left,
+ * then scrolls so the newest block sits at the right edge. For the recording sheet's waveform.
+ */
+export function tailColumns(
+  wave: { min: ArrayLike<number>; max: ArrayLike<number> },
+  windowBlocks: number,
+  widthPx: number,
+): Column[] {
+  const pxPerBlock = widthPx / windowBlocks;
+  const hidden = Math.max(0, wave.min.length - windowBlocks);
+  return liveColumns(wave, 1, 0, pxPerBlock, hidden * pxPerBlock, widthPx);
+}
+
 /** Min/max blocks of the take being recorded. Not React state: it changes ~45 times a second. */
 export class LiveWave {
   min: number[] = [];

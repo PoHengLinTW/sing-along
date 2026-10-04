@@ -139,3 +139,43 @@ describe('ChunkWriter', () => {
     expect((await store.loadSamples(d.id)).samples.length).toBe(0);
   });
 });
+
+describe('DraftStore.replaceDrafts', () => {
+  it('removes and writes drafts in one step, with one notification', async () => {
+    const store = await DraftStore.open(`replace-${Math.random()}`);
+    const a = await store.createDraft({
+      projectId: 1,
+      startOffsetMs: 0,
+      sampleRate: 48000,
+      name: 'A',
+      performer: '',
+    });
+    const b = await store.createDraft({
+      projectId: 1,
+      startOffsetMs: 0,
+      sampleRate: 48000,
+      name: 'B',
+      performer: '',
+    });
+    let notified = 0;
+    store.subscribe(() => notified++);
+    const c = { ...a, id: 'c', name: 'C' };
+    await store.replaceDrafts([a.id], [c, { ...b, name: 'B2' }]);
+    expect((await store.listDrafts(1)).map((d) => d.name).sort()).toEqual(['B2', 'C']);
+    expect(notified).toBe(1);
+  });
+
+  it('also removes the raw chunks of removed drafts', async () => {
+    const store = await DraftStore.open(`replace-${Math.random()}`);
+    const a = await store.createDraft({
+      projectId: 1,
+      startOffsetMs: 0,
+      sampleRate: 48000,
+      name: 'A',
+      performer: '',
+    });
+    await store.appendChunks(a.id, 0, [new Float32Array(4)]);
+    await store.replaceDrafts([a.id], []);
+    expect((await store.loadSamples(a.id)).chunkCount).toBe(0);
+  });
+});

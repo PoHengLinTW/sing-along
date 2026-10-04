@@ -9,11 +9,12 @@ Tasks for each milestone in [`PRD.md`](../PRD.md). Each task is about 0.5–1 da
 | [M2.md](./M2.md) | Recording | 11 |
 | [M3.md](./M3.md) | Hardening and deploy | 10 |
 | [M4.md](./M4.md) | PWA and mobile | 10 |
-| [STRETCH.md](./STRETCH.md) | Lyrics (detailed) + other stretch goals (placeholders) | 5 + 6 |
+| [STRETCH.md](./STRETCH.md) | V2 recording/editing feedback + lyrics tasks + other stretch placeholders | 4 V2 topics (not yet tasks), 5 lyrics tasks, 6 placeholders |
 
 ## Conventions
 
 - **Task ID:** `M<milestone>-<nn>`, e.g. `M1-07`. Stretch tasks use `S<goal>-<nn>`.
+- **V2 planning IDs:** `V2-REC`, `V2-TIME`, `V2-TAKES` and `V2-EDIT` identify feedback workstreams and PRD requirements. They are not implementation tasks; break them down after the design questions are resolved.
 - **Depends on:** Tasks that must be merged first. Tasks without dependencies can run in parallel.
 - **AC:** A checklist. A task is done when every box is ticked **and** the Definition of Done below is met.
 - **PRD refs:** Requirement IDs from `PRD.md` §5 (e.g. `R4`, `C1`).

@@ -23,7 +23,7 @@ const track = {
   name: 'Lead',
   performer: 'Sam',
   labels: [],
-  startOffsetMs: 0,
+  startOffsetMs: 2000,
   latencyOffsetMs: 0,
   durationMs: 4000,
   mimeType: 'audio/flac',
@@ -71,51 +71,57 @@ const patches = () =>
   f.mock.calls
     .filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')
     .map(([url, init]) => ({ url, body: JSON.parse((init as RequestInit).body as string) }));
+const setStart = (panel: HTMLElement, text: string) => {
+  const field = within(panel).getByRole('textbox', { name: 'Start time' });
+  fireEvent.change(field, { target: { value: text } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+};
 const laneLeft = (testId: string) =>
   Number.parseFloat((screen.getByTestId(testId) as HTMLElement).style.left);
 
-describe('latency on an uploaded track', () => {
+describe('start time of an uploaded track', () => {
   it('moves the lane at once, then saves one PATCH after the edits stop', async () => {
     open();
     const panel = await screen.findByTestId('panel-Lead');
-    const field = within(panel).getByRole('spinbutton', { name: /latency offset/i });
-    expect(laneLeft('lane-1')).toBe(0);
-    fireEvent.change(field, { target: { value: '100' } });
-    fireEvent.change(field, { target: { value: '150' } });
-    expect(laneLeft('lane-1')).toBeGreaterThan(0); // live, before anything is saved
+    expect(within(panel).getByRole('textbox', { name: 'Start time' })).toHaveProperty(
+      'value',
+      '00:02.000',
+    );
+    const before = laneLeft('lane-1');
+    setStart(panel, '00:02.100');
+    setStart(panel, '00:02.150');
+    expect(laneLeft('lane-1')).toBeGreaterThan(before); // live, before anything is saved
     expect(patches()).toEqual([]);
     await waitFor(() => expect(patches()).toHaveLength(1), { timeout: 2000 });
-    expect(patches()[0]).toEqual({ url: '/api/tracks/1', body: { latencyOffsetMs: 150 } });
+    expect(patches()[0]).toEqual({ url: '/api/tracks/1', body: { latencyOffsetMs: 150 } }); // start 2150 = song offset 2000 + 150
   });
 
   it('reverts and tells the user when saving fails', async () => {
     patchStatus = 500;
     open();
     const panel = await screen.findByTestId('panel-Lead');
-    fireEvent.change(within(panel).getByRole('spinbutton', { name: /latency offset/i }), {
-      target: { value: '200' },
-    });
+    const before = laneLeft('lane-1');
+    setStart(panel, '00:02.200');
     expect((await screen.findByRole('alert', {}, { timeout: 2000 })).textContent).toMatch(
-      /latency/i,
+      /start time/i,
     );
-    await waitFor(() => expect(laneLeft('lane-1')).toBe(0));
+    await waitFor(() => expect(laneLeft('lane-1')).toBe(before));
   });
 
-  it('reset saves 0', async () => {
+  it('reset returns to the original start and saves 0', async () => {
     open();
     const panel = await screen.findByTestId('panel-Lead');
-    fireEvent.change(within(panel).getByRole('spinbutton', { name: /latency offset/i }), {
-      target: { value: '80' },
-    });
-    fireEvent.click(within(panel).getByRole('button', { name: /reset/i }));
+    const before = laneLeft('lane-1');
+    setStart(panel, '00:02.080');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reset start time' }));
     await waitFor(() => expect(patches().at(-1)?.body).toEqual({ latencyOffsetMs: 0 }), {
       timeout: 2000,
     });
-    expect(laneLeft('lane-1')).toBe(0);
+    expect(laneLeft('lane-1')).toBe(before);
   });
 });
 
-describe('latency on a draft', () => {
+describe('start time of a draft', () => {
   it('moves the lane at once and stores the value on the draft (it goes up with the upload)', async () => {
     const store = await getDraftStore();
     const d = await store.createDraft({
@@ -134,9 +140,7 @@ describe('latency on a draft', () => {
     });
     open();
     const panel = await screen.findByTestId(`panel-draft-${d.id}`);
-    fireEvent.change(within(panel).getByRole('spinbutton', { name: /latency offset/i }), {
-      target: { value: '-120' },
-    });
+    setStart(panel, '-00:00.120');
     await waitFor(() => expect(laneLeft(`lane-draft-${d.id}`)).toBeLessThan(0));
     expect(patches()).toEqual([]); // drafts never touch the server
     await waitFor(async () => expect((await store.getDraft(d.id))?.latencyOffsetMs).toBe(-120), {

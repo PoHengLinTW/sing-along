@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampTrim,
   clampZoom,
+  dragStartMs,
   followScrollLeft,
   formatClock,
   formatTransportTime,
@@ -93,5 +95,44 @@ describe('followScrollLeft', () => {
   it('never scrolls past the content or below zero', () => {
     expect(followScrollLeft({ ...base, scrollLeft: 8900, playheadPx: 9990 })).toBe(9000);
     expect(followScrollLeft({ ...base, scrollLeft: 100, playheadPx: 20 })).toBe(0);
+  });
+});
+
+describe('dragStartMs', () => {
+  it('moves the start by the dragged distance, in whole milliseconds', () => {
+    expect(dragStartMs(2000, 100, 50)).toBe(4000); // 100 px at 50 px/s = 2 s
+    expect(dragStartMs(2000, -25, 50)).toBe(1500);
+    expect(dragStartMs(0, 1, 800)).toBe(1); // 1.25 ms rounds to 1
+  });
+  it('does not drag a track before the song starts', () => {
+    expect(dragStartMs(500, -1000, 50)).toBe(0);
+  });
+  it('keeps a start that is already before zero from jumping when it is dragged', () => {
+    expect(dragStartMs(-300, 0, 50)).toBe(-300);
+    expect(dragStartMs(-300, -50, 50)).toBe(-300); // cannot go further back
+    expect(dragStartMs(-300, 5, 50)).toBe(-200);
+  });
+});
+
+describe('clampTrim', () => {
+  // a take from 5000 ms to 9000 ms
+  it('trims the start to where it was dragged', () => {
+    expect(clampTrim('start', 6200, 5000, 9000)).toBe(6200);
+  });
+  it('trims the end to where it was dragged', () => {
+    expect(clampTrim('end', 7500, 5000, 9000)).toBe(7500);
+  });
+  it('is not a trim when the edge is dragged outward or has not moved', () => {
+    expect(clampTrim('start', 4000, 5000, 9000)).toBeNull();
+    expect(clampTrim('start', 5000, 5000, 9000)).toBeNull();
+    expect(clampTrim('end', 9500, 5000, 9000)).toBeNull();
+    expect(clampTrim('end', 9000, 5000, 9000)).toBeNull();
+  });
+  it('always leaves at least 100 ms of the take', () => {
+    expect(clampTrim('start', 9500, 5000, 9000)).toBe(8900);
+    expect(clampTrim('end', 5020, 5000, 9000)).toBe(5100);
+  });
+  it('a take shorter than 200 ms cannot be trimmed', () => {
+    expect(clampTrim('start', 5100, 5000, 5150)).toBeNull();
   });
 });

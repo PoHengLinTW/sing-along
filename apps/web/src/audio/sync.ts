@@ -6,6 +6,11 @@ export interface SyncTrack {
   id: number;
   startOffsetMs: number;
   latencyOffsetMs: number;
+  /**
+   * Identifies the audio file. When it changes for a loaded track the new audio is fetched and
+   * swapped in; offset edits alone never reload. Leave it out for audio that never changes.
+   */
+  version?: string;
 }
 
 export type TrackLoadStatus = 'loading' | 'ready' | 'error';
@@ -28,6 +33,9 @@ export class AudioSync {
   private known = new Map<number, SyncTrack>(); // latest desired state, loaded or not
   private inEngine = new Set<number>();
   private loading = new Set<number>();
+  /** The version of the audio each engine track plays, and of a replacement being fetched. */
+  private loadedVersion = new Map<number, string | undefined>();
+  private reloading = new Map<number, string>();
 
   constructor(
     private controller: Controller,
@@ -53,9 +61,43 @@ export class AudioSync {
             latencyOffsetMs: t.latencyOffsetMs,
           });
         }
+        this.refresh(t);
       } else if (!this.loading.has(t.id)) {
         void this.start(t);
       }
+    }
+  }
+
+  /** Different audio for a track already playing: fetch it (once) and swap it in. */
+  private refresh(t: SyncTrack): void {
+    if (t.version === undefined) return;
+    if (t.version === this.loadedVersion.get(t.id)) return;
+    if (t.version === this.reloading.get(t.id)) return;
+    void this.reload(t, t.version);
+  }
+
+  /**
+   * The old audio plays until the new one is ready, then the engine track is replaced (a track
+   * added while playing joins at the current position). A failure keeps the old audio, and the
+   * next sync tries again; a slower, older request never overwrites a newer one.
+   */
+  private async reload(t: SyncTrack, version: string): Promise<void> {
+    this.reloading.set(t.id, version);
+    try {
+      const buffer = await this.load(t);
+      const latest = this.known.get(t.id);
+      if (this.reloading.get(t.id) !== version || !latest || !this.inEngine.has(t.id)) return;
+      this.controller.removeTrack(t.id);
+      this.controller.addTrack({
+        id: latest.id,
+        buffer,
+        startOffsetMs: latest.startOffsetMs,
+        latencyOffsetMs: latest.latencyOffsetMs,
+      });
+      this.loadedVersion.set(t.id, version);
+      this.reloading.delete(t.id);
+    } catch {
+      if (this.reloading.get(t.id) === version) this.reloading.delete(t.id);
     }
   }
 
@@ -81,6 +123,8 @@ export class AudioSync {
   private drop(id: number): void {
     this.known.delete(id);
     this.loading.delete(id);
+    this.loadedVersion.delete(id);
+    this.reloading.delete(id);
     if (this.inEngine.delete(id)) this.controller.removeTrack(id);
     this.setStatus(id, undefined);
   }
@@ -99,8 +143,10 @@ export class AudioSync {
         latencyOffsetMs: latest.latencyOffsetMs,
       });
       this.inEngine.add(track.id);
+      this.loadedVersion.set(track.id, track.version);
       this.loading.delete(track.id);
       this.setStatus(track.id, 'ready');
+      this.refresh(latest); // the audio changed again while this one was downloading
     } catch {
       if (!this.loading.has(track.id)) return;
       this.loading.delete(track.id);

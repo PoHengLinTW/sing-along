@@ -6,9 +6,11 @@ import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
 import { draftEngineId } from '../audio/recorder/draftView';
 import { EncodeStatus } from '../audio/recorder/EncodeStatus';
+import { getDraftEditor } from '../audio/recorder/edit/editor';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
-import { recordingStore } from '../audio/recorder/recordingStore';
+import { RecordingSheet } from '../audio/recorder/RecordingSheet';
+import { isTakeOpen, recordingStore } from '../audio/recorder/recordingStore';
 import { getRecordingSession, setAutoStopHandler } from '../audio/recorder/session';
 import { useDrafts } from '../audio/recorder/useDrafts';
 import { useLeaveGuard } from '../audio/recorder/useLeaveGuard';
@@ -17,9 +19,11 @@ import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
 import { filterByLabels } from '../lib/labels';
+import { latencyForStart } from '../lib/startTime';
 import { useCaps } from '../lib/useStorageUsage';
 import { Timeline, TimelineZoomControls } from '../timeline/Timeline';
 import { useToast } from '../ui/toast';
+import { EditBar, REFUSALS } from './EditBar';
 import { EmptyProject } from './EmptyProject';
 import { LabelFilterBar } from './LabelFilterBar';
 import { NotFound } from './NotFound';
@@ -53,7 +57,7 @@ export function ProjectPage() {
   // that hook's cleanup pauses and rewinds.
   useEffect(
     () => () => {
-      if (recordingStore.getState().status === 'recording') getRecordingSession().stopIfRecording();
+      if (isTakeOpen(recordingStore.getState().status)) getRecordingSession().stopIfRecording();
     },
     [],
   );
@@ -115,14 +119,19 @@ export function ProjectPage() {
         <LevelMeter />
       </div>
       <EncodeStatus />
+      <RecordingSheet />
       <div className="workspace-heading">
         <div>
           <h2>Tracks &amp; timeline</h2>
-          <p>Click a waveform to seek. Shape your mix with each track's controls.</p>
+          <p>
+            Click a waveform to seek. Drag a track's top bar to move it in time. Shape your mix with
+            each track's controls.
+          </p>
         </div>
         <LabelFilterBar tracks={query.data.tracks} filter={filter} onFilterChange={setFilter} />
         <TimelineZoomControls />
       </div>
+      <EditBar draftIds={drafts.map((d) => d.id)} />
       {project.tracks.length === 0 && drafts.length === 0 && <EmptyProject />}
       <div className="workspace">
         <TrackPanels
@@ -139,6 +148,16 @@ export function ProjectPage() {
           drafts={drafts}
           onRetryAudio={retryAudio}
           showZoomControls={false}
+          onTrackStart={(t, ms) => latency.setTrackLatency(t, latencyForStart(t, ms))}
+          onDraftStart={(d, ms) => latency.setDraftLatency(d, latencyForStart(d, ms))}
+          onDraftTrim={async (d, edge, ms) => {
+            const editor = getDraftEditor();
+            const result =
+              edge === 'start'
+                ? await editor.trimBefore(d.id, ms)
+                : await editor.trimAfter(d.id, ms);
+            if (!result.ok) toast.error(REFUSALS[result.reason]?.(result) ?? '');
+          }}
         />
       </div>
       <div className="workspace-footer">

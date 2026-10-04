@@ -8,10 +8,10 @@ import {
 } from './latency';
 
 describe('clampLatency', () => {
-  it('rounds to whole ms and limits to +-1000', () => {
+  it('rounds to whole ms and limits to the API range (+-600 s)', () => {
     expect(clampLatency(12.6)).toBe(13);
-    expect(clampLatency(5000)).toBe(LATENCY_MAX_MS);
-    expect(clampLatency(-5000)).toBe(-LATENCY_MAX_MS);
+    expect(clampLatency(5_000_000)).toBe(LATENCY_MAX_MS);
+    expect(clampLatency(-5_000_000)).toBe(-LATENCY_MAX_MS);
     expect(clampLatency(Number.NaN)).toBe(0);
   });
 });
@@ -50,7 +50,7 @@ describe('latency store', () => {
   });
 
   it('sets a clamped pending value and drops values', () => {
-    store.getState().set(4, 99999);
+    store.getState().set(4, 9_999_999);
     expect(store.getState().byId[4]).toBe(LATENCY_MAX_MS);
     store.getState().drop([4, 7]);
     expect(store.getState().byId).toEqual({});

@@ -1,8 +1,9 @@
+import { OFFSET_MAX_MS } from '@sing-along/shared';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
-/** The alignment slider covers +-1 s: enough for Bluetooth headphones, far below the API's +-600 s. */
-export const LATENCY_MAX_MS = 1000;
+/** Start times are edited anywhere on the timeline, so the stored offset spans the API's +-600 s. */
+export const LATENCY_MAX_MS = OFFSET_MAX_MS;
 /** How long the offset must stop changing before it is saved. */
 export const LATENCY_SAVE_DELAY_MS = 500;
 

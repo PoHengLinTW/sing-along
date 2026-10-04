@@ -26,12 +26,16 @@ const KEYS: Record<string, TransportShortcut> = {
   ArrowRight: 'forward',
 };
 
-export type RecordShortcut = 'record' | 'mic-mute';
+export type RecordShortcut = 'record' | 'mic-mute' | 'pause';
 
-const RECORD_KEYS: Record<string, RecordShortcut> = { r: 'record', m: 'mic-mute' };
+const RECORD_KEYS: Record<string, RecordShortcut> = {
+  r: 'record',
+  m: 'mic-mute',
+  p: 'pause',
+};
 
 /**
- * R starts/stops a take, M mutes the microphone. Ignored while typing and with Ctrl/Cmd/Alt
+ * R starts/stops a take, M mutes the microphone, P pauses and resumes it. Ignored while typing and with Ctrl/Cmd/Alt
  * (Ctrl+R reloads the page, Cmd+M minimises the window).
  */
 export function recordShortcut(e: KeyLike): RecordShortcut | null {
