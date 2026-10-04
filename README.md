@@ -78,7 +78,7 @@ Browser (React + Vite)                 API (Fastify)              Storage
 The upload flow: the browser asks `POST /api/projects/:id/tracks/upload-url` (creates a
 `pending` track, returns a PUT URL signed for the exact size and type), PUTs the file to storage,
 then calls `POST /api/tracks/:id/confirm` (the API checks the object and marks the track
-`active`). Tracks can't be changed after upload; a new take is a new track.
+`active`). A track's audio is only replaced by editing it and saving over the original (after a confirmation).
 
 ## Requirements
 

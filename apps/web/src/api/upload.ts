@@ -1,4 +1,12 @@
-import type { Caps, TrackDto, UploadUrlRequest, UploadUrlResponse } from '@sing-along/shared';
+import type {
+  Caps,
+  ReplaceUrlRequest,
+  ReplaceUrlResponse,
+  TrackDto,
+  TrackReplace,
+  UploadUrlRequest,
+  UploadUrlResponse,
+} from '@sing-along/shared';
 import { resolveAudioMime } from '../lib/audioFile';
 import { durationCapMessage, fileCapMessage } from '../lib/caps';
 import { computePeaks } from '../lib/peaks';
@@ -77,6 +85,58 @@ export async function uploadPrepared(
   await deps.put(target.uploadUrl, p.blob, target.headers, p.onProgress ?? (() => {}), p.signal);
   return deps.apiFetch<TrackDto>(`/api/tracks/${target.trackId}/confirm`, {
     method: 'POST',
+    signal: p.signal,
+  });
+}
+
+export interface ReplaceParams {
+  trackId: number;
+  blob: Blob;
+  mimeType: string;
+  durationMs: number;
+  peaks: number[];
+  startOffsetMs: number;
+  latencyOffsetMs: number;
+  form: { name: string; performer: string; labelIds: number[] };
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Overwrites a saved track's audio with an edited file: replace-url -> PUT to a new object ->
+ * replace. The track keeps playing its old audio until the last step succeeds, so a failure or a
+ * cancel anywhere before it changes nothing (the stray object is left to the cleanup job).
+ */
+export async function replaceTrackAudio(
+  deps: Pick<UploadDeps, 'apiFetch' | 'put'>,
+  p: ReplaceParams,
+): Promise<TrackDto> {
+  const ask: ReplaceUrlRequest = {
+    mimeType: p.mimeType,
+    sizeBytes: p.blob.size,
+    durationMs: p.durationMs,
+  };
+  const target = await deps.apiFetch<ReplaceUrlResponse>(`/api/tracks/${p.trackId}/replace-url`, {
+    method: 'POST',
+    body: ask,
+    signal: p.signal,
+  });
+  await deps.put(target.uploadUrl, p.blob, target.headers, p.onProgress ?? (() => {}), p.signal);
+  const body: TrackReplace = {
+    key: target.key,
+    mimeType: p.mimeType,
+    sizeBytes: p.blob.size,
+    durationMs: p.durationMs,
+    peaks: p.peaks,
+    startOffsetMs: p.startOffsetMs,
+    latencyOffsetMs: p.latencyOffsetMs,
+    name: p.form.name,
+    performer: p.form.performer,
+    labels: p.form.labelIds,
+  };
+  return deps.apiFetch<TrackDto>(`/api/tracks/${p.trackId}/replace`, {
+    method: 'POST',
+    body,
     signal: p.signal,
   });
 }

@@ -1,7 +1,8 @@
 import type { ProjectDetail, TrackDto } from '@sing-along/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { uploadPrepared } from '../api/upload';
+import { apiFetch } from '../api/client';
+import { replaceTrackAudio, uploadPrepared } from '../api/upload';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftView } from '../audio/recorder/draftView';
 import { getDraftStore } from '../audio/recorder/storeInstance';
@@ -24,6 +25,19 @@ export function useDraftUploader(projectId: number) {
       await uploadDraft(
         {
           upload: (p) => uploadPrepared(browserUploadDeps, p),
+          replace: (p) => replaceTrackAudio(browserUploadDeps, p),
+          deleteTrack: (id) => apiFetch(`/api/tracks/${id}`, { method: 'DELETE' }),
+          onTracksDeleted: (ids) => {
+            for (const id of ids) mixerStore.getState().forget(id);
+            qc.setQueryData<ProjectDetail>(['project', String(projectId)], (old) =>
+              old ? { ...old, tracks: old.tracks.filter((t) => !ids.includes(t.id)) } : old,
+            );
+            void qc.invalidateQueries({ queryKey: ['projects'] });
+          },
+          onDeleteFailed: (ids) =>
+            toast.error(
+              `Saved, but ${ids.length === 1 ? 'a combined track' : `${ids.length} combined tracks`} could not be deleted. Delete ${ids.length === 1 ? 'it' : 'them'} by hand.`,
+            ),
           store,
           onUploaded: (track: TrackDto) => {
             mixerStore.getState().move(draft.engineId, track.id);
@@ -38,7 +52,11 @@ export function useDraftUploader(projectId: number) {
                 : old,
             );
             void qc.invalidateQueries({ queryKey: ['projects'] });
-            toast.success(`Uploaded '${track.name}'.`);
+            toast.success(
+              draft.replacesTrackId === undefined
+                ? `Uploaded '${track.name}'.`
+                : `Saved '${track.name}' over the original.`,
+            );
           },
         },
         draft,

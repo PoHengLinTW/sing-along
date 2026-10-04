@@ -19,6 +19,10 @@ export interface Draft {
   labelIds?: number[];
   /** Leading samples that fall before timeline 0: dropped by the encoder. */
   trimSamples?: number;
+  /** This is a saved track checked out for editing: saving overwrites that track. */
+  replacesTrackId?: number;
+  /** Saved tracks merged into this take: they are removed once it is saved. */
+  deletesTrackIds?: number[];
 }
 
 export type NewDraft = Pick<

@@ -32,7 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `apps/web/src/audio/recorder/RecordingSheet.tsx` (bottom sheet while a take is open), `session.ts` `pause()`/`resume()`, `recordingStore.ts` (`paused` status, `isTakeOpen`), `liveWave.ts` `tailColumns`. P pauses/resumes.
 - `apps/web/src/lib/startTime.ts` and `pages/StartTimeControl.tsx`: users edit one Start time; it is stored as `latency_offset_ms` (CONCLUDE Q24). `audio/latency.ts` still holds the pending-edit store.
 
-- `audio/recorder/edit/`: `ops.ts` (pure split/trim/combine), `editor.ts` (`DraftEditor`: decode, change, encode, write), `history.ts` (undo/redo, page visit only), `selection.ts`; UI in `pages/EditBar.tsx` and the checkbox in `DraftPanel`. Local drafts only (CONCLUDE Q25). Each lane has a grip bar (`Timeline.tsx`) to drag it in time, and local takes have trim handles at both ends.
+- `audio/recorder/edit/`: `ops.ts` (pure split/trim/combine), `editor.ts` (`DraftEditor`: decode, change, encode, write), `history.ts` (undo/redo, page visit only), `selection.ts`; UI in `pages/EditBar.tsx` and the checkbox in `DraftPanel`. Edits work on local takes; a saved track is checked out into one (`checkout.ts`) and saved back over the original (CONCLUDE Q25, Q26). Each lane has a grip bar (`Timeline.tsx`) to drag it in time, and local takes have trim handles at both ends.
 
 ### Where things are (M3)
 
@@ -73,7 +73,7 @@ When a decision changes: update `PRD.md`, add the decision and rationale to `CON
   - PCM chunks are written to IndexedDB *during* recording, so a crash doesn't lose the take.
   - On Stop, a Web Worker encodes FLAC 16-bit mono (libflacjs asm.js build; WAV as the fallback).
   - The take becomes a local draft, and is uploaded only when the user confirms. `MediaRecorder` is not used.
-- **Tracks can't be changed after upload.** A new take means a new track. The audio cache (Cache API) is keyed by **track ID**, not by presigned URL, and depends on this.
+- **A track's audio changes only by an edit saved over the original** (CONCLUDE Q26): `POST /api/tracks/:id/replace-url` then `/replace`, which swaps the row to a new object and deletes the old one. So audio caches are keyed by **track ID and version** (`trackVersion`: size, duration, peaks checksum), never by id alone and not by presigned URL. M4's offline cache must do the same.
 - **Mixer state** (volume, mute, solo, zoom) lives only in each browser's localStorage and is never sent to the server.
 - **Caps** (enforced on the server, set by env vars): 60 MB per file, 10 min per track, 10 tracks per project, 100 projects, an 8 GB global total (active + pending sizes). Nothing is ever removed automatically to make room.
 - **Production:** One Docker image (Fastify serves `/api` plus the built SPA) + postgres, reached through the user's existing cloudflared tunnel (Cloudflare Tunnel supplies the HTTPS that the mic and service worker need).

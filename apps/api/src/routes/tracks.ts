@@ -3,7 +3,10 @@ import {
   DEFAULT_CAPS,
   extensionForMime,
   isAllowedAudioType,
+  type ReplaceUrlResponse,
+  replaceUrlRequestSchema,
   trackOrderSchema,
+  trackReplaceSchema,
   trackUpdateSchema,
   type UploadUrlResponse,
   uploadUrlRequestSchema,
@@ -142,6 +145,131 @@ export function registerTrackRoutes(app: FastifyInstance, deps: Deps) {
         .set({ updatedAt: new Date() })
         .where(eq(projects.id, track.projectId));
     });
+    return loadTrack(db, id);
+  });
+
+  // Overwriting a track's audio (after the user edited it): upload to a NEW object, then swap the
+  // row over to it in one step. The old object is deleted afterwards, so a failure at any point
+  // leaves the track playing its old audio. Nothing here needs a schema change.
+  app.post('/api/tracks/:id/replace-url', async (req) => {
+    const id = parseId((req.params as { id: string }).id);
+    const input = parseInput(replaceUrlRequestSchema, req.body);
+    const [track] = await db
+      .select({ projectId: tracks.projectId, sizeBytes: tracks.sizeBytes })
+      .from(tracks)
+      .where(and(eq(tracks.id, id), eq(tracks.status, 'active')));
+    if (!track) throw notFound('Track');
+
+    const ext = extensionForMime(input.mimeType);
+    if (!isAllowedAudioType(input.mimeType) || !ext) {
+      throw new HttpError(415, 'Unsupported audio format');
+    }
+    if (input.sizeBytes > caps.maxFileBytes) throw fileTooLarge(caps);
+    if (input.durationMs > caps.maxTrackMs) throw trackTooLong(caps);
+    // Only the growth counts: the old file goes once the new one is in place. Checked again,
+    // under the lock, when the replacement is confirmed.
+    if ((await reservedBytes(db)) - track.sizeBytes + input.sizeBytes > caps.maxStorageBytes) {
+      throw storageFull(caps);
+    }
+
+    const contentType = input.mimeType.split(';')[0]?.trim().toLowerCase() ?? input.mimeType;
+    const key = `projects/${track.projectId}/tracks/${id}-${crypto.randomUUID()}.${ext}`;
+    const uploadUrl = await storage.presignPut({
+      key,
+      contentType,
+      sizeBytes: input.sizeBytes,
+      expiresInSec: ttl,
+    });
+    return {
+      key,
+      uploadUrl,
+      headers: { 'Content-Type': contentType },
+      expiresAt: expiresAt(),
+    } satisfies ReplaceUrlResponse;
+  });
+
+  app.post('/api/tracks/:id/replace', async (req) => {
+    const id = parseId((req.params as { id: string }).id);
+    const { key, peaks, labels: labelIds, ...input } = parseInput(trackReplaceSchema, req.body);
+    const { mimeType, sizeBytes, durationMs, ...fields } = input;
+    const [track] = await db
+      .select()
+      .from(tracks)
+      .where(and(eq(tracks.id, id), eq(tracks.status, 'active')));
+    if (!track) throw notFound('Track');
+    if (track.storageKey === key) return loadTrack(db, id); // a repeat after a lost response
+
+    if (!key.startsWith(`projects/${track.projectId}/tracks/${id}-`)) {
+      throw new HttpError(400, 'That upload does not belong to this track');
+    }
+    const head = await storage.head(key);
+    if (!head) throw new HttpError(400, 'Upload not found in storage');
+    const discard = () => storage.deleteObjects([key]).catch(() => undefined);
+    if (head.sizeBytes !== sizeBytes) {
+      await discard();
+      throw new HttpError(400, 'Uploaded file size does not match');
+    }
+    if (sizeBytes > caps.maxFileBytes) {
+      await discard();
+      throw fileTooLarge(caps);
+    }
+    if (durationMs > caps.maxTrackMs) {
+      await discard();
+      throw trackTooLong(caps);
+    }
+    const unique = labelIds ? [...new Set(labelIds)] : undefined;
+    if (unique?.length) {
+      const found = await db
+        .select({ id: labels.id })
+        .from(labels)
+        .where(inArray(labels.id, unique));
+      if (found.length !== unique.length) {
+        await discard();
+        throw new HttpError(400, 'Unknown label', { labels: 'One or more labels do not exist' });
+      }
+    }
+
+    try {
+      await db.transaction(async (tx) => {
+        await lockCaps(tx);
+        if ((await reservedBytes(tx)) - track.sizeBytes + sizeBytes > caps.maxStorageBytes) {
+          throw storageFull(caps);
+        }
+        await tx
+          .update(tracks)
+          .set({
+            ...fields,
+            storageKey: key,
+            sizeBytes,
+            durationMs,
+            mimeType: mimeType.split(';')[0]?.trim().toLowerCase() ?? mimeType,
+            peaks,
+          })
+          .where(eq(tracks.id, id));
+        if (unique) {
+          await tx.delete(trackLabels).where(eq(trackLabels.trackId, id));
+          if (unique.length) {
+            await tx
+              .insert(trackLabels)
+              .values(unique.map((labelId, position) => ({ trackId: id, labelId, position })));
+          }
+        }
+        await tx
+          .update(projects)
+          .set({ updatedAt: new Date() })
+          .where(eq(projects.id, track.projectId));
+      });
+    } catch (err) {
+      await discard();
+      throw err;
+    }
+
+    try {
+      await storage.deleteObjects([track.storageKey]);
+    } catch (err) {
+      // The row already points at the new file; the cleanup job removes the leftover object.
+      req.log.error({ err, key: track.storageKey }, 'storage delete failed after audio replace');
+    }
     return loadTrack(db, id);
   });
 

@@ -6,6 +6,7 @@ import { ApiRequestError, apiFetch } from '../api/client';
 import { mixerStore } from '../audio/mixerStore';
 import { draftEngineId } from '../audio/recorder/draftView';
 import { EncodeStatus } from '../audio/recorder/EncodeStatus';
+import { checkOutSavedTrack } from '../audio/recorder/edit/checkout';
 import { getDraftEditor } from '../audio/recorder/edit/editor';
 import { LevelMeter } from '../audio/recorder/LevelMeter';
 import { MicSetup } from '../audio/recorder/MicSetup';
@@ -18,6 +19,7 @@ import { TransportBar } from '../audio/TransportBar';
 import { useDraftAudio } from '../audio/useDraftAudio';
 import { useMixPersistence } from '../audio/useMixPersistence';
 import { useProjectAudio } from '../audio/useProjectAudio';
+import { hiddenTrackIds, withoutCheckedOut } from '../lib/checkedOut';
 import { filterByLabels } from '../lib/labels';
 import { latencyForStart } from '../lib/startTime';
 import { useCaps } from '../lib/useStorageUsage';
@@ -67,9 +69,14 @@ export function ProjectPage() {
   const latency = useLatencyEditing(Number(id), query.data?.tracks ?? EMPTY, savedDrafts);
   const drafts = latency.drafts;
   const uploadDraftTake = useDraftUploader(Number(id));
+  // A saved track that is out for editing is represented by its local take: hidden and silent.
+  const checkedOut = useMemo(() => hiddenTrackIds(drafts), [drafts]);
   const project = useMemo(
-    () => (query.data ? { ...query.data, tracks: latency.tracks } : undefined),
-    [query.data, latency.tracks],
+    () =>
+      query.data
+        ? { ...query.data, tracks: withoutCheckedOut(latency.tracks, checkedOut) }
+        : undefined,
+    [query.data, latency.tracks, checkedOut],
   );
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
   const retryAudio = useProjectAudio(project?.tracks ?? EMPTY);
@@ -79,9 +86,9 @@ export function ProjectPage() {
   const trackIds = useMemo(
     () =>
       project && draftsLoaded
-        ? [...project.tracks.map((t) => t.id), ...drafts.map((d) => draftEngineId(d.id))]
+        ? [...latency.tracks.map((t) => t.id), ...drafts.map((d) => draftEngineId(d.id))]
         : undefined,
-    [project, drafts, draftsLoaded],
+    [project, latency.tracks, drafts, draftsLoaded],
   );
   useMixPersistence(id === undefined ? undefined : Number(id), trackIds);
   const visible = useMemo(
@@ -138,7 +145,19 @@ export function ProjectPage() {
           project={project}
           visible={visible}
           drafts={drafts}
-          reorderDisabled={filter.length > 0}
+          reorderDisabled={filter.length > 0 || checkedOut.size > 0}
+          reorderHint={
+            checkedOut.size > 0
+              ? 'Finish editing the saved track to reorder'
+              : 'Clear the label filter to reorder'
+          }
+          onTrackEdit={async (t) => {
+            try {
+              await checkOutSavedTrack(t);
+            } catch {
+              toast.error(`Couldn't open '${t.name}' for editing. Try again.`);
+            }
+          }}
           onTrackLatency={latency.setTrackLatency}
           onDraftLatency={latency.setDraftLatency}
           onDraftUpload={uploadDraftTake}
