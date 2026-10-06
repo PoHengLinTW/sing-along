@@ -190,6 +190,36 @@ describe('editing a saved track', () => {
     expect(engineTracks.at(-1)).toEqual([2]);
   });
 
+  it('never shows or plays the original, not even for a moment, while the stored takes load', async () => {
+    await seedEditing();
+    const appeared: string[] = [];
+    const watcher = new MutationObserver(() => {
+      if (screen.queryByTestId('panel-Lead')) appeared.push('panel-Lead');
+      if (screen.queryByTestId('lane-1')) appeared.push('lane-1');
+    });
+    watcher.observe(document.body, { childList: true, subtree: true });
+    open();
+    await screen.findByTestId('panel-Harmony');
+    await screen.findByTestId(/^panel-draft-/);
+    watcher.disconnect();
+    expect(appeared).toEqual([]);
+    expect(engineTracks.flat()).not.toContain(1); // its audio was never fetched for the engine
+  });
+
+  it('does not flash the empty-project message while the stored takes load', async () => {
+    tracks = [];
+    await seedEditing({ replacesTrackId: undefined });
+    const seen: string[] = [];
+    const watcher = new MutationObserver(() => {
+      if (screen.queryByText(/no tracks yet|nothing here yet|add your first/i)) seen.push('empty');
+    });
+    watcher.observe(document.body, { childList: true, subtree: true });
+    open();
+    await screen.findByTestId(/^panel-draft-/);
+    watcher.disconnect();
+    expect(seen).toEqual([]);
+  });
+
   it('says so, and creates nothing, when the audio cannot be fetched', async () => {
     handler = (_m, url) =>
       url === '/api/tracks/1/audio-url' ? json(500, { message: 'down' }) : undefined;
@@ -338,5 +368,123 @@ describe('while a saved track is out for editing', () => {
     await waitFor(() => expect(screen.queryByTestId('panel-Lead')).toBeNull());
     expect((await (await getDraftStore()).listDrafts(7)).length).toBe(1);
     expect(made('GET', '/api/tracks/1/audio-url')).toHaveLength(1);
+  });
+});
+
+describe('when saving over the original is refused', () => {
+  const detailWithout = (...ids: number[]) =>
+    json(200, {
+      id: 7,
+      title: 'Song',
+      artist: null,
+      notes: null,
+      createdAt: '',
+      updatedAt: '',
+      tracks: tracks.filter((t) => !ids.includes(t.id)),
+    });
+  const overwrite = async (panel: HTMLElement) => {
+    await userEvent.click(within(panel).getByRole('button', { name: /over the original/i }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Overwrite' }),
+    );
+  };
+
+  it('storage full: shows the server message, keeps the take, nothing is uploaded', async () => {
+    handler = (_m, url) =>
+      url === '/api/tracks/1/replace-url'
+        ? json(507, {
+            message: 'Storage full (8.0 GB) — delete old tracks or projects.',
+            code: 'STORAGE_FULL',
+          })
+        : undefined;
+    const d = await seedEditing();
+    open();
+    const panel = await screen.findByTestId(`panel-draft-${d.id}`);
+    await overwrite(panel);
+    expect((await within(panel).findByRole('alert')).textContent).toMatch(/storage full/i);
+    expect(put).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('panel-Lead')).toBeNull(); // still being edited
+    expect(within(panel).getByRole('button', { name: /retry/i })).toBeTruthy();
+    expect((await (await getDraftStore()).listDrafts(7)).length).toBe(1);
+  });
+
+  it('too long or too big: shows the server message too', async () => {
+    handler = (_m, url) =>
+      url === '/api/tracks/1/replace-url'
+        ? json(413, { message: 'File is too large (limit 60.0 MB).', code: 'FILE_TOO_LARGE' })
+        : undefined;
+    const d = await seedEditing();
+    open();
+    const panel = await screen.findByTestId(`panel-draft-${d.id}`);
+    await overwrite(panel);
+    expect((await within(panel).findByRole('alert')).textContent).toMatch(/too large/i);
+  });
+
+  it('the saved track was deleted by someone else: says so and offers to save it as a new track', async () => {
+    let gone = false;
+    handler = (_m, url) => {
+      if (url === '/api/tracks/1/replace-url') {
+        gone = true;
+        return json(404, { message: 'Track not found' });
+      }
+      if (gone && url === '/api/projects/7') return detailWithout(1);
+      return undefined;
+    };
+    const d = await seedEditing();
+    open();
+    const panel = await screen.findByTestId(`panel-draft-${d.id}`);
+    await overwrite(panel);
+    const alert = await within(panel).findByRole('alert');
+    expect(alert.textContent).toMatch(/no longer exists/i);
+    expect(alert.textContent).toMatch(/deleted/i);
+    expect(within(panel).getByRole('button', { name: /save as a new track/i })).toBeTruthy();
+    // The page learned that the track is gone: it does not reappear when the link is cut.
+    await waitFor(() => expect(made('GET', '/api/projects/7').length).toBeGreaterThan(1));
+    expect(screen.queryByTestId('panel-Lead')).toBeNull();
+  });
+
+  it('"Save as a new track" turns the edit into an ordinary take that uploads as a new track', async () => {
+    handler = (_m, url) =>
+      url === '/api/tracks/1/replace-url' ? json(404, { message: 'Track not found' }) : undefined;
+    const d = await seedEditing({ deletesTrackIds: [] });
+    open();
+    const panel = await screen.findByTestId(`panel-draft-${d.id}`);
+    await overwrite(panel);
+    await userEvent.click(
+      await within(panel).findByRole('button', { name: /save as a new track/i }),
+    );
+    const store = await getDraftStore();
+    await waitFor(async () =>
+      expect((await store.getDraft(d.id))?.replacesTrackId).toBeUndefined(),
+    );
+    await waitFor(() => expect(within(panel).getByText('Draft')).toBeTruthy());
+    expect(within(panel).getByRole('button', { name: /^upload lead/i })).toBeTruthy();
+    expect(within(panel).queryByRole('alert')).toBeNull();
+  });
+
+  it('a 404 for a plain take is not mistaken for a deleted track', async () => {
+    handler = (_m, url) =>
+      url.endsWith('/upload-url') ? json(404, { message: 'Project not found' }) : undefined;
+    const store = await getDraftStore();
+    const d0 = await store.createDraft({
+      projectId: 7,
+      startOffsetMs: 0,
+      sampleRate: 48000,
+      name: 'Take 1',
+      performer: '',
+    });
+    await store.updateDraft(d0.id, {
+      status: 'ready',
+      blob: new NodeBlob([new Uint8Array(1)]) as unknown as Blob,
+      mimeType: 'audio/flac',
+      peaks: [0.5],
+      durationMs: 1000,
+    });
+    open();
+    const panel = await screen.findByTestId(`panel-draft-${d0.id}`);
+    await userEvent.click(within(panel).getByRole('button', { name: /upload take 1/i }));
+    const alert = await within(panel).findByRole('alert');
+    expect(alert.textContent).not.toMatch(/no longer exists/i);
+    expect(within(panel).queryByRole('button', { name: /save as a new track/i })).toBeNull();
   });
 });

@@ -88,11 +88,20 @@ describe('a saved track checked out for editing', () => {
     expect(button(/save alto over the original/i).disabled).toBe(false);
   });
 
-  it('Escape cancels too', async () => {
+  it('Escape cancels too: the dialog closes and nothing is sent', async () => {
     await show(editing);
     fireEvent.click(button(/save alto over the original/i));
-    fireEvent.keyDown(dialog(), { key: 'Escape' });
-    fireEvent(dialog(), new Event('cancel', { cancelable: true }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent(dialog(), new Event('cancel', { cancelable: true })); // what the browser fires on Escape
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(button(/save alto over the original/i).disabled).toBe(false);
+  });
+
+  it('clicking the backdrop is not a way to confirm', async () => {
+    await show(editing);
+    fireEvent.click(button(/save alto over the original/i));
+    fireEvent.click(dialog());
     expect(onUpload).not.toHaveBeenCalled();
   });
 

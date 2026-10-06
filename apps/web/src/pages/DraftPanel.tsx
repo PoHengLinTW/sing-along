@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ApiRequestError } from '../api/client';
 import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftStore } from '../audio/recorder/draftStore';
@@ -26,7 +27,7 @@ interface Props {
 type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; progress: number }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; trackGone?: boolean };
 
 export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Props) {
   const [confirming, setConfirming] = useState(false);
@@ -44,9 +45,16 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
       await onUpload(draft, (progress) => setUpload({ status: 'uploading', progress }));
       setUpload({ status: 'idle' });
     } catch (err) {
+      // A 404 while overwriting means the saved track was deleted since it was checked out.
+      const trackGone = replaces && err instanceof ApiRequestError && err.status === 404;
       setUpload({
         status: 'error',
-        message: err instanceof Error ? err.message : 'The upload failed.',
+        message: trackGone
+          ? `The saved track '${draft.name}' no longer exists: someone may have deleted it.`
+          : err instanceof Error
+            ? err.message
+            : 'The upload failed.',
+        trackGone,
       });
     }
   };
@@ -92,11 +100,24 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
         {upload.status === 'error' ? (
           <>
             <span role="alert" className="draft-upload-error" title={upload.message}>
-              Upload failed: {upload.message}
+              {upload.trackGone ? upload.message : `Upload failed: ${upload.message}`}
             </span>
-            <button type="button" onClick={() => void startUpload()}>
-              Retry
-            </button>
+            {upload.trackGone ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  // Cut the link: the take is now an ordinary one and uploads as a new track.
+                  await (await open()).updateDraft(draft.id, { replacesTrackId: undefined });
+                  setUpload({ status: 'idle' });
+                }}
+              >
+                Save as a new track
+              </button>
+            ) : (
+              <button type="button" onClick={() => void startUpload()}>
+                Retry
+              </button>
+            )}
           </>
         ) : uploading ? (
           <progress aria-label={`Uploading ${draft.name}`} max={1} value={upload.progress} />

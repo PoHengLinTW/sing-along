@@ -288,6 +288,28 @@ describe('POST /api/tracks/:id/replace', () => {
     expect((await row())?.storageKey).toBe(OLD_KEY());
   });
 
+  it("two people saving: the last save wins and the first one's file is removed", async () => {
+    const first = `projects/${projectId}/tracks/${trackId}-first.flac`;
+    const second = `projects/${projectId}/tracks/${trackId}-second.flac`;
+    storage.objects.set(first, { sizeBytes: 20_000 });
+    storage.objects.set(second, { sizeBytes: 21_000 });
+    expect((await replace({ key: first })).statusCode).toBe(200);
+    expect((await replace({ key: second, sizeBytes: 21_000, durationMs: 4500 })).statusCode).toBe(
+      200,
+    );
+    expect(await row()).toMatchObject({ storageKey: second, sizeBytes: 21_000, durationMs: 4500 });
+    expect(storage.deleted).toContain(first);
+    expect(storage.objects.has(second)).toBe(true);
+  });
+
+  it('a save for a track that someone deleted meanwhile is a 404, and nothing is changed', async () => {
+    storage.objects.set(newKey(), { sizeBytes: 20_000 });
+    await app.inject({ method: 'DELETE', url: `/api/tracks/${trackId}` });
+    const res = await replace();
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toMatch(/track/i);
+  });
+
   it('a failed delete of the old file does not fail the replace', async () => {
     uploaded();
     storage.failDelete = true;

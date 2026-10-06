@@ -2,7 +2,10 @@ import { writeFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import { apiCreateProject, apiDeleteProject, apiUploadTrack } from '../support/api';
 import { wavBuffer, wavFile } from '../support/audio';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import { createProjectViaUi, uniqueTitle, uploadTrackViaUi } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M3-01 (caps enforced by the server), M3-02 (storage indicator), M3-03 (cap-aware UI),
 // M3-10 flow 3 (the upload is refused when the project already has 10 tracks).

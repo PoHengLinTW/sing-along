@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { apiCreateProject } from '../support/api';
 import { wavFile } from '../support/audio';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import {
   createProjectViaUi,
   currentSeconds,
@@ -11,6 +12,8 @@ import {
   uniqueTitle,
   uploadTrackViaUi,
 } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M1-11 (upload flow), M1-12 (waveform appears), M3-10 flow 1 (create -> upload with a label ->
 // waveform -> play -> the time advances).

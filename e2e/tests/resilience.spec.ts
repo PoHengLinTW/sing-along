@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { apiCreateProject, apiUploadTrack } from '../support/api';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import { currentSeconds, uniqueTitle } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M3-05 (loading, error and empty states), M3-06 (the built server: routing and caching).
 
