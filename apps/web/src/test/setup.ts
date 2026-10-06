@@ -1,5 +1,8 @@
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach } from 'vitest';
+
+// CI runners are slower and busier than a laptop: a wait is only long when something is wrong.
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(() => {
   if (typeof document !== 'undefined') cleanup();

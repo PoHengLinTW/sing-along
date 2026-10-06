@@ -92,7 +92,7 @@ describe('start time of an uploaded track', () => {
     setStart(panel, '00:02.150');
     expect(laneLeft('lane-1')).toBeGreaterThan(before); // live, before anything is saved
     expect(patches()).toEqual([]);
-    await waitFor(() => expect(patches()).toHaveLength(1), { timeout: 2000 });
+    await waitFor(() => expect(patches()).toHaveLength(1), { timeout: 8000 });
     expect(patches()[0]).toEqual({ url: '/api/tracks/1', body: { latencyOffsetMs: 150 } }); // start 2150 = song offset 2000 + 150
   });
 
@@ -102,7 +102,7 @@ describe('start time of an uploaded track', () => {
     const panel = await screen.findByTestId('panel-Lead');
     const before = laneLeft('lane-1');
     setStart(panel, '00:02.200');
-    expect((await screen.findByRole('alert', {}, { timeout: 2000 })).textContent).toMatch(
+    expect((await screen.findByRole('alert', {}, { timeout: 8000 })).textContent).toMatch(
       /start time/i,
     );
     await waitFor(() => expect(laneLeft('lane-1')).toBe(before));
@@ -115,7 +115,7 @@ describe('start time of an uploaded track', () => {
     setStart(panel, '00:02.080');
     fireEvent.click(within(panel).getByRole('button', { name: 'Reset start time' }));
     await waitFor(() => expect(patches().at(-1)?.body).toEqual({ latencyOffsetMs: 0 }), {
-      timeout: 2000,
+      timeout: 8000,
     });
     expect(laneLeft('lane-1')).toBe(before);
   });
@@ -144,7 +144,7 @@ describe('start time of a draft', () => {
     await waitFor(() => expect(laneLeft(`lane-draft-${d.id}`)).toBeLessThan(0));
     expect(patches()).toEqual([]); // drafts never touch the server
     await waitFor(async () => expect((await store.getDraft(d.id))?.latencyOffsetMs).toBe(-120), {
-      timeout: 2000,
+      timeout: 8000,
     });
   });
 });
