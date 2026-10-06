@@ -70,3 +70,42 @@ describe('createBufferLoader: expired presigned URLs', () => {
     expect(s.download).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('createBufferLoader: a track whose audio was overwritten', () => {
+  it('fetches again when the version changes, because the saved audio is no longer the same', async () => {
+    const s = setup();
+    await s.load(7, 'v1');
+    await s.load(7, 'v2');
+    expect(s.download).toHaveBeenCalledTimes(2);
+  });
+
+  it('still caches for the same version', async () => {
+    const s = setup();
+    await s.load(7, 'v1');
+    await s.load(7, 'v1');
+    expect(s.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not keep the old audio once newer audio was asked for', async () => {
+    const s = setup();
+    await s.load(7, 'v1');
+    await s.load(7, 'v2');
+    await s.load(7, 'v1'); // the old one is gone: it has to be fetched again
+    expect(s.download).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps tracks apart', async () => {
+    const s = setup();
+    await s.load(7, 'v1');
+    await s.load(8, 'v1');
+    await s.load(7, 'v1');
+    expect(s.download).toHaveBeenCalledTimes(2);
+  });
+
+  it('without a version it behaves as before', async () => {
+    const s = setup();
+    await s.load(7);
+    await s.load(7);
+    expect(s.download).toHaveBeenCalledTimes(1);
+  });
+});

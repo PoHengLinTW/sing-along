@@ -26,6 +26,21 @@ interface Deps {
 const startOf = (d: Draft) => d.startOffsetMs + d.latencyOffsetMs;
 
 /**
+ * Saved tracks that disappear when these takes are combined: the first take keeps its own link
+ * (it overwrites that track), every other take's saved track, and any it was already going to
+ * remove, goes once the result is saved.
+ */
+function mergedAwayTracks(sorted: Draft[]): number[] | undefined {
+  const [first, ...rest] = sorted as [Draft, ...Draft[]];
+  const ids = new Set(first.deletesTrackIds ?? []);
+  for (const d of rest) {
+    if (d.replacesTrackId !== undefined) ids.add(d.replacesTrackId);
+    for (const id of d.deletesTrackIds ?? []) ids.add(id);
+  }
+  return ids.size ? [...ids] : undefined;
+}
+
+/**
  * Edits to local drafts: split, trim and combine. Each edit decodes the take, changes the audio,
  * encodes it again and writes the result, so a draft is always one ordinary playable file and
  * the upload sends exactly what was heard. Every edit is one undo step.
@@ -51,6 +66,8 @@ export class DraftEditor {
         ...this.withAudio(draft, parts[1], b as EncodedTake),
         id: crypto.randomUUID(),
         name: `${draft.name} (2)`,
+        replacesTrackId: undefined, // the second part is a new track on save
+        deletesTrackIds: undefined,
         createdAt: await this.createdAfter(store, draft),
       };
       await this.commit(store, 'Split', [draft], [first, second]);
@@ -83,11 +100,11 @@ export class DraftEditor {
           ? { ok: false, reason: 'overlap', overlapMs: merged.overlapMs }
           : { ok: false, reason: merged.error };
       }
-      const result = this.withAudio(
-        drafts[0] as Draft,
-        merged.piece,
-        await this.encoded(merged.piece),
-      );
+      const result: Draft = {
+        ...this.withAudio(drafts[0] as Draft, merged.piece, await this.encoded(merged.piece)),
+        deletesTrackIds: mergedAwayTracks(drafts),
+      };
+      if (result.deletesTrackIds === undefined) delete result.deletesTrackIds;
       await this.commit(store, 'Combine', drafts, [result]);
       return { ok: true };
     });

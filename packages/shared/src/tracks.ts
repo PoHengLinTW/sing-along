@@ -59,6 +59,23 @@ export const uploadUrlResponseSchema = z.object({
 });
 export type UploadUrlResponse = z.infer<typeof uploadUrlResponseSchema>;
 
+/** Asks for a place to upload new audio that will replace a track's file. */
+export const replaceUrlRequestSchema = z.object({
+  mimeType: uploadUrlRequestSchema.shape.mimeType,
+  sizeBytes: uploadUrlRequestSchema.shape.sizeBytes,
+  durationMs: uploadUrlRequestSchema.shape.durationMs,
+});
+export type ReplaceUrlRequest = z.infer<typeof replaceUrlRequestSchema>;
+
+export const replaceUrlResponseSchema = z.object({
+  /** The new object's key: send it back to `replace` once the PUT has finished. */
+  key: z.string(),
+  uploadUrl: z.string(),
+  headers: z.object({ 'Content-Type': z.string() }),
+  expiresAt: z.string(),
+});
+export type ReplaceUrlResponse = z.infer<typeof replaceUrlResponseSchema>;
+
 export const audioUrlResponseSchema = z.object({ url: z.string(), expiresAt: z.string() });
 export type AudioUrlResponse = z.infer<typeof audioUrlResponseSchema>;
 
@@ -77,6 +94,17 @@ export const trackUpdateSchema = z
   })
   .partial();
 export type TrackUpdate = z.infer<typeof trackUpdateSchema>;
+
+/** Swaps in the uploaded audio; the optional fields are changed in the same step. */
+export const trackReplaceSchema = z.object({
+  key: z.string().min(1),
+  mimeType: uploadUrlRequestSchema.shape.mimeType,
+  sizeBytes: uploadUrlRequestSchema.shape.sizeBytes,
+  durationMs: uploadUrlRequestSchema.shape.durationMs,
+  peaks: uploadUrlRequestSchema.shape.peaks,
+  ...trackUpdateSchema.shape,
+});
+export type TrackReplace = z.input<typeof trackReplaceSchema>;
 
 export const trackOrderSchema = z.object({ trackIds: z.array(z.number().int().positive()) });
 export type TrackOrder = z.infer<typeof trackOrderSchema>;

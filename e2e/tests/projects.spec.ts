@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { apiCreateProject, apiUploadTrack } from '../support/api';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import { createProjectViaUi, uniqueTitle } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M1-07 (shell, 404s), M1-08 (home: list, create), M1-09 (header edit, delete project).
 

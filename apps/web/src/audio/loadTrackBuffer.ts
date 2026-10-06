@@ -10,12 +10,16 @@ interface Deps {
 
 const REFUSED = new Set([400, 401, 403]);
 
-/** Downloads and decodes a track's audio straight from storage. Cached by track id (audio never changes after upload). */
+/**
+ * Downloads and decodes a track's audio straight from storage. Cached by track id and version:
+ * a saved track's audio can be overwritten after an edit, which changes its version, so the old
+ * buffer is dropped and never served again.
+ */
 export function createBufferLoader(deps: Deps) {
-  const cache = new Map<number, Promise<AudioBuffer>>();
-  return (trackId: number): Promise<AudioBuffer> => {
+  const cache = new Map<number, { version: string | undefined; promise: Promise<AudioBuffer> }>();
+  return (trackId: number, version?: string): Promise<AudioBuffer> => {
     const hit = cache.get(trackId);
-    if (hit) return hit;
+    if (hit && hit.version === version) return hit.promise;
     const promise = (async () => {
       const fetchAudio = async () => {
         const { url } = await deps.api(`/api/tracks/${trackId}/audio-url`);
@@ -27,8 +31,11 @@ export function createBufferLoader(deps: Deps) {
       if (!res.ok) throw new Error(`Audio download failed (${res.status})`);
       return deps.decode(await res.arrayBuffer());
     })();
-    cache.set(trackId, promise);
-    promise.catch(() => cache.delete(trackId)); // failures are not cached
+    cache.set(trackId, { version, promise });
+    // Failures are not cached (unless a newer version already took the place).
+    promise.catch(() => {
+      if (cache.get(trackId)?.promise === promise) cache.delete(trackId);
+    });
     return promise;
   };
 }

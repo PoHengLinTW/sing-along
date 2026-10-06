@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ApiRequestError } from '../api/client';
 import { getAudioController } from '../audio/controller';
 import { mixerStore } from '../audio/mixerStore';
 import type { DraftStore } from '../audio/recorder/draftStore';
@@ -26,12 +27,16 @@ interface Props {
 type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; progress: number }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; trackGone?: boolean };
 
 export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Props) {
   const [confirming, setConfirming] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [upload, setUpload] = useState<UploadState>({ status: 'idle' });
   const uploading = upload.status === 'uploading';
+  const replaces = draft.replacesTrackId !== undefined;
+  const merged = draft.deletesTrackIds?.length ?? 0;
+  const needsAnswer = replaces || merged > 0;
 
   const startUpload = async () => {
     if (!onUpload || uploading) return;
@@ -40,9 +45,16 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
       await onUpload(draft, (progress) => setUpload({ status: 'uploading', progress }));
       setUpload({ status: 'idle' });
     } catch (err) {
+      // A 404 while overwriting means the saved track was deleted since it was checked out.
+      const trackGone = replaces && err instanceof ApiRequestError && err.status === 404;
       setUpload({
         status: 'error',
-        message: err instanceof Error ? err.message : 'The upload failed.',
+        message: trackGone
+          ? `The saved track '${draft.name}' no longer exists: someone may have deleted it.`
+          : err instanceof Error
+            ? err.message
+            : 'The upload failed.',
+        trackGone,
       });
     }
   };
@@ -63,7 +75,7 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
           checked={selected}
           onChange={() => selectionStore.getState().toggle(draft.id)}
         />
-        <span className="draft-badge">Draft</span>
+        <span className="draft-badge">{replaces ? 'Editing' : 'Draft'}</span>
         <EditableText
           label="Take name"
           labelHidden
@@ -88,25 +100,42 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
         {upload.status === 'error' ? (
           <>
             <span role="alert" className="draft-upload-error" title={upload.message}>
-              Upload failed: {upload.message}
+              {upload.trackGone ? upload.message : `Upload failed: ${upload.message}`}
             </span>
-            <button type="button" onClick={() => void startUpload()}>
-              Retry
-            </button>
+            {upload.trackGone ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  // Cut the link: the take is now an ordinary one and uploads as a new track.
+                  await (await open()).updateDraft(draft.id, { replacesTrackId: undefined });
+                  setUpload({ status: 'idle' });
+                }}
+              >
+                Save as a new track
+              </button>
+            ) : (
+              <button type="button" onClick={() => void startUpload()}>
+                Retry
+              </button>
+            )}
           </>
         ) : uploading ? (
           <progress aria-label={`Uploading ${draft.name}`} max={1} value={upload.progress} />
         ) : (
-          <span className="hint">Not uploaded: only on this device</span>
+          <span className="hint">
+            {replaces
+              ? 'Editing a saved track: not saved yet'
+              : 'Not uploaded: only on this device'}
+          </span>
         )}
         {onUpload && upload.status !== 'error' && (
           <button
             type="button"
-            aria-label={`Upload ${draft.name}`}
+            aria-label={replaces ? `Save ${draft.name} over the original` : `Upload ${draft.name}`}
             disabled={uploading}
-            onClick={() => void startUpload()}
+            onClick={() => (needsAnswer ? setAsking(true) : void startUpload())}
           >
-            Upload
+            {replaces ? 'Save over original' : 'Upload'}
           </button>
         )}
       </div>
@@ -128,10 +157,26 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
         onPreview={() => void getAudioController().previewAround()}
       />
       <ConfirmDialog
+        open={asking}
+        title={replaces ? 'Overwrite saved track?' : 'Delete the combined tracks?'}
+        message={savingWarning(draft.name, replaces, merged)}
+        confirmLabel={replaces ? 'Overwrite' : 'Upload and delete'}
+        destructive
+        onCancel={() => setAsking(false)}
+        onConfirm={() => {
+          setAsking(false);
+          void startUpload();
+        }}
+      />
+      <ConfirmDialog
         open={confirming}
-        title="Discard take?"
-        message={`'${draft.name}' exists only on this device. If you discard it, it is gone for good.`}
-        confirmLabel="Discard"
+        title={replaces ? 'Stop editing?' : 'Discard take?'}
+        message={
+          replaces
+            ? `Your edits to '${draft.name}' are thrown away. The saved track is not changed.`
+            : `'${draft.name}' exists only on this device. If you discard it, it is gone for good.`
+        }
+        confirmLabel={replaces ? 'Discard edits' : 'Discard'}
         destructive
         onCancel={() => setConfirming(false)}
         onConfirm={async () => {
@@ -143,4 +188,18 @@ export function DraftPanel({ draft, store, onLatency = () => {}, onUpload }: Pro
       />
     </div>
   );
+}
+
+const savedTracks = (n: number) => `${n} saved track${n === 1 ? '' : 's'}`;
+
+/** What saving this take will do to what is already on the server. */
+function savingWarning(name: string, replaces: boolean, merged: number): string {
+  if (replaces) {
+    const others =
+      merged > 0
+        ? ` The ${savedTracks(merged).replace('saved ', 'other saved ')} combined into it will be deleted.`
+        : '';
+    return `This overwrites the saved track '${name}' for everyone with your edited version.${others} It cannot be undone.`;
+  }
+  return `${savedTracks(merged)} ${merged === 1 ? 'was' : 'were'} combined into '${name}'. When you save it, they will be deleted for everyone. This cannot be undone.`;
 }
