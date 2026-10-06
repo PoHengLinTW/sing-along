@@ -1,6 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 import { apiCreateProject, apiUploadTrack } from '../support/api';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import { currentSeconds, lanes, pxPerSecond, timeText, uniqueTitle } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M1-10 (transport), M1-12 (seek, zoom, ruler), M1-14 (transport bar, shortcuts), M1-15 (A-B loop).
 

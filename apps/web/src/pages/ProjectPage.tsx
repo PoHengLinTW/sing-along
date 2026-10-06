@@ -79,7 +79,9 @@ export function ProjectPage() {
     [query.data, latency.tracks, checkedOut],
   );
   // The engine always gets every track: the label filter only hides rows, it never stops audio.
-  const retryAudio = useProjectAudio(project?.tracks ?? EMPTY);
+  // Not before the stored takes are read: a track that is out for editing must never be shown, or
+  // fetched for the engine, even for a moment.
+  const retryAudio = useProjectAudio(draftsLoaded ? (project?.tracks ?? EMPTY) : EMPTY);
   useDraftAudio(drafts);
   // Drafts count as "known" ids for mix persistence, but only once they have loaded: pruning
   // against an empty list would forget their remembered mix.
@@ -110,7 +112,7 @@ export function ProjectPage() {
       </div>
     );
   }
-  if (!query.data || !project) return <p>Loading…</p>;
+  if (!query.data || !project || !draftsLoaded) return <p>Loading…</p>;
   return (
     <section className="studio-page">
       <ProjectHeader project={query.data} />

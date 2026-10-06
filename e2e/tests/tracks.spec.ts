@@ -1,6 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 import { apiCreateProject, apiUploadTrack } from '../support/api';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
 import { lanes, panel, uniqueTitle, uploadTrackViaUi } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M1-13 (track panel: mix controls, rename, reorder, delete), M1-16 (labels UI),
 // M1-17 (mix persistence, per browser).

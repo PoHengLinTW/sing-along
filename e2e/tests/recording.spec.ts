@@ -1,6 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
-import { apiCreateProject, apiUploadTrack } from '../support/api';
+import { apiCreateProject, apiUploadMp3, apiUploadTrack } from '../support/api';
+import { deleteProjectsAfterEachTest } from '../support/cleanup';
+import { storedKeys } from '../support/storage';
 import { currentSeconds, uniqueTitle } from '../support/ui';
+
+deleteProjectsAfterEachTest();
 
 // M2 (recording): mic setup and errors, input check, record over a track, draft, start time,
 // upload, discard, crash recovery, leave guard. Chromium's fake microphone stands in for a real
@@ -1042,6 +1046,154 @@ test.describe('editing local takes', () => {
     expect(after[0]?.durationMs).toBeGreaterThan(13_000); // 10 s of timeline plus the second track
     await expect(page.getByTestId('panel-Bass')).toHaveCount(0);
     await expect(page.getByTestId('panel-Alto')).toBeVisible();
+  });
+
+  test('the old file is really removed from storage when a track is overwritten', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('OldFile'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    const before = await storedKeys(id);
+    expect(before).toHaveLength(1);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await dragHandle(page, 'end', -100);
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await saveOver(page, 'Alto');
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    await expect.poll(() => storedKeys(id)).toHaveLength(1);
+    const after = await storedKeys(id);
+    expect(after[0]).not.toBe(before[0]);
+    expect(after[0]).toMatch(/\.flac$/); // the edited audio is FLAC
+  });
+
+  test('an MP3 track can be edited: it is decoded, trimmed, saved as FLAC and plays', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Mp3Edit'));
+    await apiUploadMp3(request, id, 'Choir');
+    const [original] = await savedTracks(request, id);
+    const keysBefore = await storedKeys(id);
+    expect(keysBefore[0]).toMatch(/\.mp3$/);
+    await page.goto(`/project/${id}`);
+    await expect(page.getByTestId('panel-Choir')).toBeVisible();
+    await editSaved(page, 'Choir');
+    await expect(drafts(page)).toHaveCount(1);
+    await dragHandle(page, 'end', -100); // ~2 s off a 5 s take
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await saveOver(page, 'Choir');
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const detail = await (await request.get(`/api/projects/${id}`)).json();
+    const track = detail.tracks[0];
+    expect(track.id).toBe(original?.id);
+    expect(track.mimeType).toBe('audio/flac');
+    expect(track.durationMs).toBeGreaterThan(2000);
+    expect(track.durationMs).toBeLessThan(4200);
+    expect(await storedKeys(id)).toHaveLength(1);
+    expect((await storedKeys(id))[0]).toMatch(/\.flac$/);
+    // And it still plays: the player's own length follows the new, shorter audio.
+    await page.reload();
+    await expect(page.getByTestId('panel-Choir')).toBeVisible();
+    await expect
+      .poll(
+        async () => {
+          const text = (await page.locator('.transport .time').first().textContent()) ?? '';
+          const m = /\/\s*(\d+):(\d+)/.exec(text);
+          return m ? Number(m[1]) * 60 + Number(m[2]) : 99;
+        },
+        { timeout: 15_000 },
+      )
+      .toBeLessThanOrEqual(4);
+  });
+
+  test('volume, name and labels carry over to the edit and survive saving it', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Carry'));
+    await apiUploadTrack(request, id, 'Alto', 6, ['Alto']);
+    await page.goto(`/project/${id}`);
+    await page.getByTestId('panel-Alto').getByLabel('Volume').fill('40');
+    await editSaved(page, 'Alto');
+    const draft = drafts(page).first();
+    await expect(draft.getByLabel('Volume')).toHaveValue('40'); // the copy sounds like the track did
+    await expect(draft.getByLabel('Take name')).toHaveValue('Alto');
+    await dragHandle(page, 'end', -100);
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    await saveOver(page, 'Alto');
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const panel = page.getByTestId('panel-Alto');
+    await expect(panel.getByLabel('Volume')).toHaveValue('40');
+    const track = (await (await request.get(`/api/projects/${id}`)).json()).tracks[0];
+    expect(track.labels.map((l: { name: string }) => l.name)).toEqual(['Alto']);
+    expect(track.name).toBe('Alto');
+  });
+
+  test('if someone deletes the track meanwhile, saving says so and the edit can be kept as a new track', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Gone'));
+    await apiUploadTrack(request, id, 'Alto', 6);
+    const [original] = await savedTracks(request, id);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'Alto');
+    await dragHandle(page, 'end', -100);
+    await expect(bar(page).getByRole('button', { name: /^undo trim end/i })).toBeEnabled({
+      timeout: 30_000,
+    });
+    expect((await request.delete(`/api/tracks/${original?.id}`)).ok()).toBe(true); // someone else
+    await saveOver(page, 'Alto');
+    const alert = drafts(page).first().getByRole('alert');
+    await expect(alert).toContainText(/no longer exists/i);
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /save as a new track/i })
+      .click();
+    await expect(drafts(page).first()).toContainText('Draft');
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /upload alto/i })
+      .click();
+    await expect(drafts(page)).toHaveCount(0, { timeout: 30_000 });
+    const after = await savedTracks(request, id);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.id).not.toBe(original?.id);
+    expect(after[0]?.name).toBe('Alto');
+  });
+
+  test('splitting a saved track in a full project: the first half is saved, the second explains the limit', async ({
+    page,
+    request,
+  }) => {
+    const { id } = await apiCreateProject(request, uniqueTitle('Full'));
+    for (let i = 1; i <= 10; i++) await apiUploadTrack(request, id, `T${i}`, 1);
+    await page.goto(`/project/${id}`);
+    await editSaved(page, 'T1');
+    await pickTake(page, 'T1');
+    await seekIntoDraft(page, 25); // 0.5 s into a 1 s track
+    await bar(page)
+      .getByRole('button', { name: /split at playhead/i })
+      .click();
+    await expect.poll(() => names(page), { timeout: 30_000 }).toEqual(['T1', 'T1 (2)']);
+    await saveOver(page, 'T1');
+    await expect(drafts(page)).toHaveCount(1, { timeout: 30_000 });
+    await drafts(page)
+      .first()
+      .getByRole('button', { name: /upload t1 \(2\)/i })
+      .click();
+    await expect(drafts(page).first().getByRole('alert')).toContainText(
+      /track limit reached \(10\)/i,
+    );
+    expect(await savedTracks(request, id)).toHaveLength(10); // nothing was lost, nothing exceeded
   });
 
   test('Edit is unavailable while recording, and reordering is paused while a track is out for editing', async ({
