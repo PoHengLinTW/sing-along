@@ -2,13 +2,13 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
 export interface TrackMix {
-  volume: number; // 0..1.5 (100% = 1)
+  volume: number; // 0..3 (100% = 1)
   muted: boolean;
   solo: boolean;
 }
 
 export const DEFAULT_MIX: TrackMix = { volume: 1, muted: false, solo: false };
-export const MAX_VOLUME = 1.5;
+export const MAX_VOLUME = 3;
 
 export interface MixerState {
   byId: Record<number, TrackMix>;

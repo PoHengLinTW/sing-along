@@ -91,11 +91,11 @@ describe('track panel', () => {
     expect((within(lead).getByLabelText('Performer') as HTMLInputElement).value).toBe('Sam');
     const vol = within(lead).getByLabelText('Volume') as HTMLInputElement;
     expect(vol.value).toBe('100');
-    expect(vol.max).toBe('150');
+    expect(vol.max).toBe('300');
     expect(within(lead).getByText('100%')).toBeTruthy();
   });
 
-  it('volume slider changes the mix live (0-150%)', async () => {
+  it('volume slider changes the mix live (0-300%)', async () => {
     const lead = await panel('Lead');
     fireEvent.change(within(lead).getByLabelText('Volume'), { target: { value: '120' } });
     expect(mixerStore.getState().get(1).volume).toBeCloseTo(1.2);

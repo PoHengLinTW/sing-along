@@ -23,7 +23,7 @@ anything. Don't put it anywhere you wouldn't want that.
 - Upload audio (mp3, m4a/aac, wav, ogg, webm/opus, flac) by picking or dropping files. Files go
   from the browser **straight to storage**; the API only hands out signed URLs.
 - Waveforms are drawn immediately from stored peaks; audio downloads in the background.
-- Synced playback with per-track volume (0-150%), mute and solo. Space, Home, Left and Right
+- Synced playback with per-track volume (0-300%), mute and solo. Space, Home, Left and Right
   work as shortcuts (ignored while you type in a field).
 - A-B loop with no gap at the wrap: click "Set A" / "Set B", or drag on the ruler.
 - Zoom (buttons or Ctrl/Cmd + scroll), auto-follow of the playhead, click or drag to seek.
