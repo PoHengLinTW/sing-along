@@ -34,9 +34,11 @@ describe('mixer store', () => {
     expect(DEFAULT_MIX).toEqual({ volume: 1, muted: false, solo: false });
   });
 
-  it('setVolume clamps to 0-150%', () => {
-    mixer.getState().setVolume(1, 2);
-    expect(mixer.getState().get(1).volume).toBe(1.5);
+  it('setVolume clamps to 0-300%', () => {
+    mixer.getState().setVolume(1, 2.5);
+    expect(mixer.getState().get(1).volume).toBe(2.5);
+    mixer.getState().setVolume(1, 5);
+    expect(mixer.getState().get(1).volume).toBe(3);
     mixer.getState().setVolume(1, -1);
     expect(mixer.getState().get(1).volume).toBe(0);
   });

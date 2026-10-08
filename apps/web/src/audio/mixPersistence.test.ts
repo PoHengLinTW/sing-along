@@ -53,7 +53,7 @@ describe('parseMix', () => {
     });
     expect(parseMix(json)).toEqual({
       byId: {
-        1: { volume: 1.5, muted: false, solo: true },
+        1: { volume: 3, muted: false, solo: true },
         2: { volume: 0, muted: false, solo: false },
       },
       pxPerSec: null,

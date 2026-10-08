@@ -10,7 +10,7 @@ export function MixControls({ id, children }: { id: number; children?: ReactNode
         type="range"
         aria-label="Volume"
         min={0}
-        max={150}
+        max={300}
         step={1}
         value={Math.round(mix.volume * 100)}
         onChange={(e) => mixerStore.getState().setVolume(id, Number(e.target.value) / 100)}

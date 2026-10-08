@@ -90,6 +90,13 @@ describe('DraftPanel', () => {
     expect((await store.getDraft(view.id))?.name).toBe('Take 1');
   });
 
+  it('lets the volume go up to 300%', () => {
+    const slider = screen.getByLabelText('Volume') as HTMLInputElement;
+    expect(slider.max).toBe('300');
+    fireEvent.change(slider, { target: { value: '300' } });
+    expect(mixerStore.getState().get(view.engineId).volume).toBeCloseTo(3);
+  });
+
   it("has volume, mute and solo like any track, under the draft's engine id", () => {
     fireEvent.change(screen.getByLabelText('Volume'), { target: { value: '80' } });
     expect(mixerStore.getState().get(view.engineId).volume).toBeCloseTo(0.8);

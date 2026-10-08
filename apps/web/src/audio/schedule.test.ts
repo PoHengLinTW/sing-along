@@ -75,7 +75,7 @@ describe('audibleGain (solo and mute)', () => {
   const s = (over = {}) => ({ volume: 1, muted: false, solo: false, ...over });
   it('is the volume when nothing is muted or soloed', () => {
     expect(audibleGain(s({ volume: 0.8 }), false)).toBe(0.8);
-    expect(audibleGain(s({ volume: 1.5 }), false)).toBe(1.5);
+    expect(audibleGain(s({ volume: 3 }), false)).toBe(3);
   });
   it('is 0 when muted', () => {
     expect(audibleGain(s({ muted: true }), false)).toBe(0);
